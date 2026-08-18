@@ -12,6 +12,8 @@ import Home from "./pages/Home"
 import Booking from "./pages/Booking"
 import BookingHistory from "./pages/BookingHistory"
 import About from "./pages/About"
+import Services from "./pages/Services"
+import Contact from "./pages/Contact"
 import Profile from "./pages/Profile"
 import Settings from "./pages/Settings"
 import Rates from "./pages/Rates"
@@ -36,7 +38,9 @@ function App() {
         <Route element={<ProtectedRoute userType="client" />}>
           <Route element={<ClientShell />}>
             <Route index element={<TitledPage title="Home"><Home /></TitledPage>} />
-            <Route path="about" element={<TitledPage title="About"><About /></TitledPage>} />
+            <Route path="about" element={<TitledPage title="About One True Logistics"><About /></TitledPage>} />
+            <Route path="services" element={<TitledPage title="Our Services"><Services /></TitledPage>} />
+            <Route path="contact" element={<TitledPage title="Contact Information"><Contact /></TitledPage>} />
             <Route path="profile" element={<TitledPage title="Profile"><Profile /></TitledPage>} />
             <Route path="settings" element={<TitledPage title="Settings"><Settings /></TitledPage>} />
             <Route path="rates" element={<TitledPage title="Rates and Payment Types"><Rates /></TitledPage>} />

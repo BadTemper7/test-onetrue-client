@@ -1023,12 +1023,18 @@ const LegalAgreementCheckbox = ({
 );
 
 // File Upload Component
-const FileUpload = ({ label, name, onChange, error, required, icon }) => {
+const FileUpload = ({ label, name, onChange, error, required, icon, maxSize = 10 }) => {
   const [fileName, setFileName] = useState("");
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      if (file.size > maxSize * 1024 * 1024) {
+        e.target.value = "";
+        setFileName("");
+        window.alert(`File size exceeds the ${maxSize} MB maximum upload size.`);
+        return;
+      }
       setFileName(file.name);
       onChange(e);
     }
@@ -1057,6 +1063,7 @@ const FileUpload = ({ label, name, onChange, error, required, icon }) => {
           </div>
         </div>
       </div>
+      <p className="mt-1 text-xs text-gray-500">Maximum file size: {maxSize} MB</p>
       {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
     </div>
   );

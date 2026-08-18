@@ -17,6 +17,7 @@ const ModernFileInput = ({
   file,
   onChange,
   disabled = false,
+  maxSize = 10,
   error = "",
 }) => {
   const inputId = `file-${name || label.replace(/\s+/g, "-").toLowerCase()}`
@@ -53,7 +54,7 @@ const ModernFileInput = ({
           </div>
 
           <div className="mt-1 truncate text-xs font-bold text-slate-500">
-            {file ? file.name : helper}
+            {file ? file.name : `${helper} • Maximum ${maxSize} MB`}
           </div>
 
           {file ? (
@@ -73,7 +74,7 @@ const ModernFileInput = ({
       </div>
 
       {error && <p className="mt-3 text-xs font-bold text-red-600">{error}</p>}
-      <input id={inputId} className="sr-only" name={name} type="file" accept={accept} required={required} disabled={disabled} onChange={onChange} />
+      <input id={inputId} className="sr-only" name={name} type="file" accept={accept} required={required} disabled={disabled} onChange={(event) => { const selected = event.target.files?.[0]; if (selected && selected.size > maxSize * 1024 * 1024) { event.target.value = ""; window.alert(`File size exceeds the ${maxSize} MB maximum upload size.`); return; } onChange?.(event); }} />
     </label>
   )
 }

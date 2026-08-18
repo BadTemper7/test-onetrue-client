@@ -8,6 +8,7 @@ import {
   FiFilter,
   FiPackage,
   FiRefreshCw,
+  FiRotateCcw,
   FiSearch,
   FiTruck,
   FiX,
@@ -16,23 +17,56 @@ import Button from "../components/ui/Button";
 import InputDate from "../components/ui/InputDate";
 import InputFile from "../components/ui/InputFile";
 import InputText from "../components/ui/InputText";
+import InputTime from "../components/ui/InputTime";
 import Pagination from "../components/ui/Pagination";
 import { api, getApiError, resolveFileUrl } from "../lib/api";
 import { useBookingStore } from "../stores/bookingStore";
 import { usePagination } from "../hooks/usePagination";
 
 const statusConfig = {
-  pending_admin_approval: ["Pending approval", "bg-amber-100 text-amber-700", FiClock],
-  approved_area_assigned: ["Area assigned", "bg-blue-100 text-blue-700", FiCheckCircle],
+  pending_admin_approval: [
+    "Pending approval",
+    "bg-amber-100 text-amber-700",
+    FiClock,
+  ],
+  approved_area_assigned: [
+    "Area assigned",
+    "bg-blue-100 text-blue-700",
+    FiCheckCircle,
+  ],
   rejected: ["Rejected", "bg-red-100 text-red-700", FiX],
-  gate_in_approved: ["Gate-in approved", "bg-emerald-100 text-emerald-700", FiTruck],
-  stored_in_assigned_area: ["Stored in yard", "bg-blue-100 text-blue-700", FiPackage],
-  gate_out_requested: ["Gate-out requested", "bg-emerald-100 text-emerald-700", FiClock],
-  gate_out_approved: ["Gate-out approved", "bg-blue-100 text-blue-700", FiCheckCircle],
-  completed_gate_out_done: ["Completed", "bg-slate-100 text-slate-700", FiCheckCircle],
+  gate_in_approved: [
+    "Gate-in approved",
+    "bg-emerald-100 text-emerald-700",
+    FiTruck,
+  ],
+  stored_in_assigned_area: [
+    "Stored in yard",
+    "bg-blue-100 text-blue-700",
+    FiPackage,
+  ],
+  gate_out_requested: [
+    "Gate-out requested",
+    "bg-emerald-100 text-emerald-700",
+    FiClock,
+  ],
+  gate_out_approved: [
+    "Gate-out approved",
+    "bg-blue-100 text-blue-700",
+    FiCheckCircle,
+  ],
+  gate_out_reversal_requested: [
+    "Reversal requested",
+    "bg-amber-100 text-amber-700",
+    FiRotateCcw,
+  ],
+  completed_gate_out_done: [
+    "Completed",
+    "bg-slate-100 text-slate-700",
+    FiCheckCircle,
+  ],
   cancelled: ["Cancelled", "bg-slate-100 text-slate-500", FiX],
 };
-
 
 const toDateOnlyString = (value) => {
   if (!value) return "";
@@ -52,6 +86,7 @@ const billingLabels = {
   payment_submitted: "Payment submitted",
   payment_under_review: "Under review",
   payment_rejected: "Payment rejected",
+  additional_payment_required: "Additional payment required",
   paid_approved: "Paid",
 };
 
@@ -61,37 +96,87 @@ const formatDate = (value) => {
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString();
 };
 
+const formatDateTime = (value) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
+};
+
 const BillingBreakdown = ({ booking, className = "" }) => {
   const lineItems = booking?.billingLineItems || [];
   if (lineItems.length === 0) return null;
 
   return (
-    <div className={`rounded-xl border border-slate-200 bg-slate-50 p-4 ${className}`}>
-      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Billing breakdown</p>
+    <div
+      className={`rounded-xl border border-slate-200 bg-slate-50 p-4 ${className}`}
+    >
+      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+        Billing breakdown
+      </p>
       <div className="mt-3 space-y-2">
         {lineItems.map((item, index) => (
-          <div key={`${item.chargeCode || item.description}-${index}`} className="flex items-start justify-between gap-3 text-sm">
+          <div
+            key={`${item.chargeCode || item.description}-${index}`}
+            className="flex items-start justify-between gap-3 text-sm"
+          >
             <div>
-              <p className="font-semibold text-slate-700">{String(item.chargeCode || "").startsWith("LIFT_ON") ? "Lift On Charge" : String(item.chargeCode || "").startsWith("LIFT_OFF") ? "Lift Off Charge" : item.description || item.chargeCode}</p>
-              <p className="text-xs text-slate-500">{Number(item.quantity || 0).toLocaleString()} x PHP {Number(item.rateAmount || 0).toLocaleString()}</p>
+              <p className="font-semibold text-slate-700">
+                {String(item.chargeCode || "").startsWith("LIFT_ON")
+                  ? "Lift On Charge"
+                  : String(item.chargeCode || "").startsWith("LIFT_OFF")
+                    ? "Lift Off Charge"
+                    : item.description || item.chargeCode}
+              </p>
+              <p className="text-xs text-slate-500">
+                {Number(item.quantity || 0).toLocaleString()} x PHP{" "}
+                {Number(item.rateAmount || 0).toLocaleString()}
+              </p>
             </div>
-            <p className="shrink-0 font-bold text-slate-900">PHP {Number(item.amount || 0).toLocaleString()}</p>
+            <p className="shrink-0 font-bold text-slate-900">
+              PHP {Number(item.amount || 0).toLocaleString()}
+            </p>
           </div>
         ))}
       </div>
       <div className="mt-3 space-y-2 border-t border-slate-200 pt-3 text-sm">
         <div className="flex items-center justify-between font-semibold text-slate-700">
           <span>Subtotal</span>
-          <span>PHP {Number(booking.billingSubtotal || 0).toLocaleString()}</span>
+          <span>
+            PHP {Number(booking.billingSubtotal || 0).toLocaleString()}
+          </span>
         </div>
         <div className="flex items-center justify-between font-semibold text-slate-700">
-          <span>VAT ({Math.round(Number(booking.vatRate || 0.12) * 100)}%)</span>
+          <span>
+            {booking.isVatApplicable === false
+              ? "VAT (Non-VAT)"
+              : `VAT (${Math.round(Number(booking.vatRate || 0.12) * 100)}%)`}
+          </span>
           <span>PHP {Number(booking.vatAmount || 0).toLocaleString()}</span>
         </div>
         <div className="flex items-center justify-between font-black text-slate-900">
-          <span>Total</span>
-          <span>PHP {Number(booking.billingTotal || booking.paymentAmount || 0).toLocaleString()}</span>
+          <span>Gross total</span>
+          <span>
+            PHP {Number(booking.billingTotal || 0).toLocaleString()}
+          </span>
         </div>
+        {Number(booking.approvedPaymentAmount || 0) > 0 && (
+          <>
+            <div className="flex items-center justify-between font-semibold text-emerald-700">
+              <span>Approved payment credit</span>
+              <span>- PHP {Number(booking.approvedPaymentAmount || 0).toLocaleString()}</span>
+            </div>
+            <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2 font-black text-slate-900">
+              <span>Balance due</span>
+              <span>PHP {Number(booking.paymentBalanceDue ?? booking.paymentAmount ?? 0).toLocaleString()}</span>
+            </div>
+          </>
+        )}
+        {Number(booking.paymentCreditAmount || 0) > 0 && (
+          <div className="flex items-center justify-between font-semibold text-emerald-700">
+            <span>Remaining credit</span>
+            <span>PHP {Number(booking.paymentCreditAmount || 0).toLocaleString()}</span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -105,6 +190,7 @@ const BookingHistory = () => {
     error,
     fetchBookings,
     requestGateOut,
+    requestGateOutReversal,
     submitPayment,
   } = useBookingStore();
 
@@ -117,18 +203,25 @@ const BookingHistory = () => {
 
   const availablePaymentTypes = paymentTypes;
   const [actionError, setActionError] = useState("");
-  const [gateOut, setGateOut] = useState({ outDate: "", remarks: "" });
+  const [gateOut, setGateOut] = useState({ outDate: "", outTime: null, remarks: "" });
+  const [reversalReason, setReversalReason] = useState("");
   const [payment, setPayment] = useState({
     paymentTypeId: "",
     paymentReferenceNumber: "",
     paymentRemarks: "",
     paymentProof: null,
+    isVatApplicable: true,
   });
 
   useEffect(() => {
     fetchBookings().catch(() => {});
-    api.get("/client/payment-types")
-      .then(({ data }) => setPaymentTypes((data.paymentTypes || []).filter((item) => item.type !== "cash")))
+    api
+      .get("/client/payment-types")
+      .then(({ data }) =>
+        setPaymentTypes(
+          (data.paymentTypes || []).filter((item) => item.type === "bank"),
+        ),
+      )
       .catch(() => setPaymentTypes([]))
       .finally(() => setPaymentTypesLoaded(true));
   }, [fetchBookings]);
@@ -142,13 +235,20 @@ const BookingHistory = () => {
   const filteredBookings = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return bookings.filter((booking) => {
-      const matchesSearch = !term || [
-        booking.bookingReference,
-        booking.containerNumber,
-        booking.driverName,
-        booking.shippingLine,
-      ].some((value) => String(value || "").toLowerCase().includes(term));
-      const matchesStatus = filterStatus === "all" || booking.status === filterStatus;
+      const matchesSearch =
+        !term ||
+        [
+          booking.bookingReference,
+          booking.containerNumber,
+          booking.driverName,
+          booking.shippingLine,
+        ].some((value) =>
+          String(value || "")
+            .toLowerCase()
+            .includes(term),
+        );
+      const matchesStatus =
+        filterStatus === "all" || booking.status === filterStatus;
       return matchesSearch && matchesStatus;
     });
   }, [bookings, filterStatus, searchTerm]);
@@ -163,12 +263,14 @@ const BookingHistory = () => {
     setSelectedBooking(booking);
     setModal(type);
     setActionError("");
-    setGateOut({ outDate: "", remarks: "" });
+    setGateOut({ outDate: "", outTime: null, remarks: "" });
+    setReversalReason("");
     setPayment({
       paymentTypeId: availablePaymentTypes[0]?.id || "",
-        paymentReferenceNumber: "",
+      paymentReferenceNumber: "",
       paymentRemarks: "",
       paymentProof: null,
+      isVatApplicable: booking.isVatApplicable !== false,
     });
   };
 
@@ -184,8 +286,43 @@ const BookingHistory = () => {
       setActionError("Please select a Date Out.");
       return;
     }
+    if (!gateOut.outTime) {
+      setActionError("Please select a Time Out.");
+      return;
+    }
+
+    const selectedTime = gateOut.outTime instanceof Date
+      ? gateOut.outTime
+      : new Date(gateOut.outTime);
+    const combinedOutDate = new Date(`${gateOut.outDate}T00:00:00`);
+
+    if (Number.isNaN(selectedTime.getTime()) || Number.isNaN(combinedOutDate.getTime())) {
+      setActionError("Please select a valid Date Out and Time Out.");
+      return;
+    }
+
+    combinedOutDate.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
+
     try {
-      await requestGateOut(selectedBooking.id, gateOut);
+      await requestGateOut(selectedBooking.id, {
+        outDate: combinedOutDate.toISOString(),
+        remarks: gateOut.remarks,
+      });
+      closeModal();
+    } catch (requestError) {
+      setActionError(getApiError(requestError));
+    }
+  };
+
+  const submitGateOutReversalRequest = async () => {
+    if (!reversalReason.trim()) {
+      setActionError("Please provide the reason for reversing the approved Gate-Out.");
+      return;
+    }
+    try {
+      await requestGateOutReversal(selectedBooking.id, {
+        reason: reversalReason.trim(),
+      });
       closeModal();
     } catch (requestError) {
       setActionError(getApiError(requestError));
@@ -197,8 +334,8 @@ const BookingHistory = () => {
       setActionError("Please select a payment type.");
       return;
     }
-    if (!payment.paymentReferenceNumber.trim() && !payment.paymentProof) {
-      setActionError("Enter the payment reference number or upload proof of payment.");
+    if (!payment.paymentProof) {
+      setActionError("Proof of payment is required for all online payments.");
       return;
     }
     try {
@@ -210,32 +347,89 @@ const BookingHistory = () => {
   };
 
   const StatusBadge = ({ booking }) => {
-    const [label, className, Icon] = statusConfig[booking.status] || [booking.status, "bg-slate-100 text-slate-700", FiClock];
+    const [label, className, Icon] = statusConfig[booking.status] || [
+      booking.status,
+      "bg-slate-100 text-slate-700",
+      FiClock,
+    ];
     return (
-      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>
-        <Icon className="h-3.5 w-3.5" /> {label}
+      <span className="inline-flex flex-wrap items-center gap-2">
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}
+        >
+          <Icon className="h-3.5 w-3.5" /> {label}
+        </span>
+        {booking.isOverstaying && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700">
+            <FiClock className="h-3.5 w-3.5" /> Overstaying
+          </span>
+        )}
       </span>
     );
   };
 
   const renderAction = (booking) => {
-    if (booking.status === "stored_in_assigned_area" && booking.billingStatus === "unpaid") {
+    if (
+      booking.status === "approved_area_assigned" &&
+      booking.loloPaymentStage !== "gate_out" &&
+      ["unpaid", "payment_rejected", "additional_payment_required"].includes(
+        booking.billingStatus,
+      ) &&
+      Number(booking.paymentBalanceDue ?? booking.paymentAmount ?? 0) > 0 &&
+      paymentTypesLoaded &&
+      availablePaymentTypes.length > 0
+    ) {
       return (
-        <button onClick={() => openModal("gateOut", booking)} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700">
-          Submit Date Out
+        <button
+          onClick={() => openModal("payment", booking)}
+          className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+        >
+          Pay Gate-In LOLO
+        </button>
+      );
+    }
+
+    if (
+      booking.status === "stored_in_assigned_area" &&
+      ["unpaid", "payment_rejected", "paid_approved"].includes(booking.billingStatus)
+    ) {
+      return (
+        <button
+          onClick={() => openModal("gateOut", booking)}
+          className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+        >
+          Submit Date & Time Out
         </button>
       );
     }
 
     if (
       ["gate_out_requested", "gate_out_approved"].includes(booking.status) &&
-      ["unpaid", "payment_rejected"].includes(booking.billingStatus) &&
+      ["unpaid", "payment_rejected", "additional_payment_required"].includes(booking.billingStatus) &&
+      Number(booking.paymentBalanceDue ?? booking.paymentAmount ?? 0) > 0 &&
       paymentTypesLoaded &&
       availablePaymentTypes.length > 0
     ) {
       return (
-        <button onClick={() => openModal("payment", booking)} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700">
+        <button
+          onClick={() => openModal("payment", booking)}
+          className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+        >
           Submit Non-Cash Payment
+        </button>
+      );
+    }
+
+    if (
+      booking.status === "gate_out_approved" &&
+      !booking.releasedAt
+    ) {
+      return (
+        <button
+          onClick={() => openModal("reversal", booking)}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-700"
+        >
+          <FiRotateCcw /> Request Reversal
         </button>
       );
     }
@@ -248,28 +442,49 @@ const BookingHistory = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-800">Booking history</h1>
-          <p className="mt-1 text-sm text-slate-500">Track booking approval, yard storage, payment, and release status.</p>
+          <p className="mt-1 text-sm text-slate-500">
+            Track booking approval, yard storage, payment, and release status.
+          </p>
         </div>
-        <button onClick={() => fetchBookings().catch(() => {})} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60">
+        <button
+          onClick={() => fetchBookings().catch(() => {})}
+          disabled={loading}
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+        >
           <FiRefreshCw className={loading ? "animate-spin" : ""} /> Refresh
         </button>
       </div>
 
       {(error || actionError) && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{actionError || error}</div>
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {actionError || error}
+        </div>
       )}
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
             <FiSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search booking, container, driver, or shipping line" className="w-full rounded-lg border border-slate-300 py-2.5 pl-9 pr-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" />
+            <input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search booking, container, driver, or shipping line"
+              className="w-full rounded-lg border border-slate-300 py-2.5 pl-9 pr-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+            />
           </div>
           <div className="flex items-center gap-2">
             <FiFilter className="text-slate-400" />
-            <select value={filterStatus} onChange={(event) => setFilterStatus(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none">
+            <select
+              value={filterStatus}
+              onChange={(event) => setFilterStatus(event.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none"
+            >
               <option value="all">All statuses</option>
-              {Object.entries(statusConfig).map(([value, config]) => <option key={value} value={value}>{config[0]}</option>)}
+              {Object.entries(statusConfig).map(([value, config]) => (
+                <option key={value} value={value}>
+                  {config[0]}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -284,7 +499,7 @@ const BookingHistory = () => {
                 <th className="px-4 py-3">Container</th>
                 <th className="px-4 py-3">Driver</th>
                 <th className="px-4 py-3">Date in</th>
-                <th className="px-4 py-3">Date out</th>
+                <th className="px-4 py-3">Date / Time out</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Billing</th>
                 <th className="px-4 py-3 text-right">Actions</th>
@@ -293,22 +508,85 @@ const BookingHistory = () => {
             <tbody className="divide-y divide-slate-100">
               {bookingPagination.paginatedItems.map((booking) => (
                 <tr key={booking.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3"><p className="font-semibold text-emerald-600">{booking.bookingReference}</p><p className="text-xs text-slate-400">{booking.shippingLine}</p></td>
-                  <td className="px-4 py-3"><p className="font-medium text-slate-700">{booking.containerNumber}</p><p className="text-xs capitalize text-slate-500">{booking.containerSize} ft • {String(booking.containerType || "").replaceAll("_", " ")}</p></td>
-                  <td className="px-4 py-3"><p className="text-slate-700">{booking.driverName || "—"}</p><p className="text-xs text-slate-500">{booking.truckPlateNumber || "—"}</p></td>
-                  <td className="px-4 py-3 text-slate-600">{formatDate(booking.inDate || booking.expectedArrivalDate)}</td>
-                  <td className="px-4 py-3 text-slate-600">{formatDate(booking.outDate)}</td>
-                  <td className="px-4 py-3"><StatusBadge booking={booking} /></td>
-                  <td className="px-4 py-3"><p className="font-semibold text-slate-700">PHP {Number(booking.billingTotal || booking.paymentAmount || 0).toLocaleString()}</p><p className="text-xs text-slate-500">{billingLabels[booking.billingStatus] || booking.billingStatus}</p></td>
+                  <td className="px-4 py-3">
+                    <p className="font-semibold text-emerald-600">
+                      {booking.bookingReference}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {booking.shippingLine}
+                    </p>
+                    {booking.recordSource === "legacy_migration" && <span className="mt-2 inline-flex rounded-full bg-violet-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-violet-700">Legacy Record</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-slate-700">
+                      {booking.containerNumber}
+                    </p>
+                    <p className="text-xs capitalize text-slate-500">
+                      {booking.containerSize} ft •{" "}
+                      {String(booking.containerType || "").replaceAll("_", " ")}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="text-slate-700">
+                      {booking.driverName || "—"}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {booking.truckPlateNumber || "—"}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {formatDate(booking.inDate || booking.expectedArrivalDate)}
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {formatDateTime(booking.outDate)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <StatusBadge booking={booking} />
+                  </td>
+                  <td className="px-4 py-3">
+                    {booking.status === "approved_area_assigned" && booking.loloPaymentStage === "gate_out" ? (
+                      <>
+                        <p className="font-semibold text-blue-700">Deferred to Gate-Out</p>
+                        <p className="text-xs text-slate-500">No Gate-In payment required</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-semibold text-slate-700">
+                          PHP {Number(booking.billingTotal || 0).toLocaleString()}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {billingLabels[booking.billingStatus] || booking.billingStatus}
+                          {Number(booking.approvedPaymentAmount || 0) > 0
+                            ? ` • Balance PHP ${Number(booking.paymentBalanceDue ?? booking.paymentAmount ?? 0).toLocaleString()}`
+                            : ""}
+                        </p>
+                      </>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">
-                      <button onClick={() => openModal("details", booking)} className="rounded-lg p-2 text-emerald-600 hover:bg-emerald-50" aria-label="View booking"><FiEye /></button>
+                      <button
+                        onClick={() => openModal("details", booking)}
+                        className="rounded-lg p-2 text-emerald-600 hover:bg-emerald-50"
+                        aria-label="View booking"
+                      >
+                        <FiEye />
+                      </button>
                       {renderAction(booking)}
                     </div>
                   </td>
                 </tr>
               ))}
-              {!loading && filteredBookings.length === 0 && <tr><td colSpan="8" className="px-4 py-14 text-center text-slate-500">No bookings found.</td></tr>}
+              {!loading && filteredBookings.length === 0 && (
+                <tr>
+                  <td
+                    colSpan="8"
+                    className="px-4 py-14 text-center text-slate-500"
+                  >
+                    No bookings found.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -319,90 +597,426 @@ const BookingHistory = () => {
         <div className="fixed inset-0 z-[70] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm">
           <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
-              <div><h2 className="text-xl font-bold text-slate-800">{modal === "gateOut" ? "Submit Date Out" : modal === "payment" ? "Submit non-cash payment" : "Booking details"}</h2><p className="mt-1 text-sm text-slate-500">{selectedBooking.bookingReference} • {selectedBooking.containerNumber}</p></div>
-              <button onClick={closeModal} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><FiX /></button>
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">
+                  {modal === "gateOut"
+                    ? "Submit Date & Time Out"
+                    : modal === "payment"
+                      ? (selectedBooking.billingStage === "gate_in" ||
+                        selectedBooking.status === "approved_area_assigned") && selectedBooking.loloPaymentStage !== "gate_out"
+                        ? "Pay Gate-In LOLO"
+                        : "Submit Gate-Out Payment"
+                      : modal === "reversal"
+                        ? "Request Gate-Out Reversal"
+                        : "Booking details"}
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {selectedBooking.bookingReference} •{" "}
+                  {selectedBooking.containerNumber}
+                </p>
+              </div>
+              <button
+                onClick={closeModal}
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+              >
+                <FiX />
+              </button>
             </div>
 
-            {actionError && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{actionError}</div>}
+            {actionError && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                {actionError}
+              </div>
+            )}
 
             {modal === "details" && (
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 {[
-                  ["Status", (statusConfig[selectedBooking.status] || [selectedBooking.status])[0]],
-                  ["Billing", billingLabels[selectedBooking.billingStatus] || selectedBooking.billingStatus],
+                  [
+                    "Status",
+                    (statusConfig[selectedBooking.status] || [
+                      selectedBooking.status,
+                    ])[0],
+                  ],
+                  [
+                    "Billing",
+                    selectedBooking.status === "approved_area_assigned" && selectedBooking.loloPaymentStage === "gate_out"
+                      ? "Deferred to Gate-Out"
+                      : billingLabels[selectedBooking.billingStatus] || selectedBooking.billingStatus,
+                  ],
+                  [
+                    "LOLO collection",
+                    selectedBooking.loloPaymentStage === "gate_out" ? "Gate-Out" : "Gate-In",
+                  ],
+                  [
+                    "Billing stage",
+                    selectedBooking.billingStage === "gate_in"
+                      ? selectedBooking.loloPaymentStage === "gate_out" ? "Gate-In (no payment due)" : "Gate-In LOLO"
+                      : selectedBooking.billingStage === "gate_out"
+                        ? "Gate-Out"
+                        : "—",
+                  ],
+                  ["Record source", selectedBooking.recordSource === "legacy_migration" ? "Legacy migration" : "Client booking"],
+                  ["Legacy registration", selectedBooking.legacyRegistrationNumber],
+                  ["Historical date quality", selectedBooking.historicalGateInDateType],
                   ["Shipping line", selectedBooking.shippingLine],
                   ["Driver", selectedBooking.driverName],
                   ["Truck plate", selectedBooking.truckPlateNumber],
-                  ["Assigned area", selectedBooking.assignedArea?.name || selectedBooking.assignedAreaName],
+                  [
+                    "Assigned area",
+                    selectedBooking.assignedArea?.name ||
+                      selectedBooking.assignedAreaName,
+                  ],
                   ["Assigned slot", selectedBooking.assignedSlotNumber],
+                  ["Requested Date / Time Out", formatDateTime(selectedBooking.outDate)],
+                  ["Gate-Out schedule", selectedBooking.isOverstaying ? "Overstaying" : selectedBooking.gateOutScheduleStatus],
+                  ["Overstay started", formatDateTime(selectedBooking.gateOutOverstayStartedAt)],
+                  ["Billing computed as of", formatDateTime(selectedBooking.billingComputedAt)],
+                  ["Approved payment", Number(selectedBooking.approvedPaymentAmount || 0) > 0 ? `PHP ${Number(selectedBooking.approvedPaymentAmount).toLocaleString()}` : "—"],
+                  ["Current balance due", `PHP ${Number(selectedBooking.paymentBalanceDue ?? selectedBooking.paymentAmount ?? 0).toLocaleString()}`],
+                  ["Reversal reason", selectedBooking.gateOutReversalRequestReason],
+                  ["Reversal decision", selectedBooking.gateOutReversalDecision],
+                  ["Reversal remarks", selectedBooking.gateOutReversalAdminRemarks],
                   ["Rejection reason", selectedBooking.rejectionReason],
-                ].map(([label, value]) => <div key={label} className="rounded-lg bg-slate-50 p-3"><p className="text-xs font-semibold uppercase text-slate-400">{label}</p><p className="mt-1 text-sm font-medium text-slate-700">{value || "—"}</p></div>)}
-                <BillingBreakdown booking={selectedBooking} className="sm:col-span-2" />
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-lg bg-slate-50 p-3">
+                    <p className="text-xs font-semibold uppercase text-slate-400">
+                      {label}
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-slate-700">
+                      {value || "—"}
+                    </p>
+                  </div>
+                ))}
+                <BillingBreakdown
+                  booking={selectedBooking}
+                  className="sm:col-span-2"
+                />
               </div>
             )}
 
             {modal === "gateOut" && (
               <div className="mt-5 space-y-4">
-                <InputDate
-                  label="Date Out"
-                  name="outDate"
-                  value={gateOut.outDate}
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <InputDate
+                    label="Date Out"
+                    name="outDate"
+                    value={gateOut.outDate}
+                    onChange={(event) =>
+                      setGateOut((current) => ({
+                        ...current,
+                        outDate: toDateOnlyString(event.target.value),
+                      }))
+                    }
+                    required
+                  />
+                  <InputTime
+                    label="Time Out"
+                    name="outTime"
+                    value={gateOut.outTime}
+                    onChange={(event) =>
+                      setGateOut((current) => ({
+                        ...current,
+                        outTime: event.target.value,
+                      }))
+                    }
+                    placeholder="Select release time"
+                    minuteStep={60}
+                    hourlyOnly
+                    required
+                  />
+                </div>
+                <InputText
+                  label="Remarks"
+                  name="remarks"
+                  value={gateOut.remarks}
                   onChange={(event) =>
                     setGateOut((current) => ({
                       ...current,
-                      outDate: toDateOnlyString(event.target.value),
+                      remarks: event.target.value,
                     }))
                   }
-                  required
+                  placeholder="Optional gate-out remarks"
                 />
-                <InputText label="Remarks" name="remarks" value={gateOut.remarks} onChange={(event) => setGateOut((current) => ({ ...current, remarks: event.target.value }))} placeholder="Optional gate-out remarks" />
-                <p className="rounded-lg bg-blue-50 p-3 text-xs text-blue-700">The final bill will be computed using the selected Date Out and active billing rates.</p>
+                <p className="rounded-lg bg-blue-50 p-3 text-xs text-blue-700">
+                  The final Gate-Out bill will be computed using the selected Date Out and Time Out. Storage and other charges are payable only at Gate-Out{selectedBooking.loloPaymentStage === "gate_out" ? ", and this booking's LOLO charge will be included there as well" : "; your approved Gate-In LOLO payment will be applied as credit"}.
+                </p>
+              </div>
+            )}
+
+            {modal === "reversal" && (
+              <div className="mt-5 space-y-4">
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                  <p className="font-bold">Requesting this will temporarily block container release.</p>
+                  <p className="mt-1 text-xs leading-5">
+                    Admin must approve the reversal. Once approved, the container returns to storage, storage billing resumes, and the approved payment remains as credit for this booking.
+                  </p>
+                </div>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-slate-700">
+                    Reversal reason <span className="text-red-500">*</span>
+                  </span>
+                  <textarea
+                    className="input min-h-[120px]"
+                    value={reversalReason}
+                    onChange={(event) => setReversalReason(event.target.value)}
+                    placeholder="Example: I selected the wrong container for the Gate-Out request."
+                    maxLength={500}
+                  />
+                  <span className="mt-1 block text-xs text-slate-400">{reversalReason.length}/500</span>
+                </label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl bg-slate-50 p-3">
+                    <p className="text-xs font-bold uppercase text-slate-400">Container</p>
+                    <p className="mt-1 font-bold text-slate-800">{selectedBooking.containerNumber}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3">
+                    <p className="text-xs font-bold uppercase text-slate-400">Approved payment</p>
+                    <p className="mt-1 font-bold text-emerald-700">PHP {Number(selectedBooking.approvedPaymentAmount || selectedBooking.billingTotal || 0).toLocaleString()}</p>
+                  </div>
+                </div>
               </div>
             )}
 
             {modal === "payment" && (
               <div className="mt-5 space-y-4">
-                <div className="rounded-xl bg-emerald-50 p-4"><p className="text-sm text-emerald-700">Final bill</p><p className="mt-1 text-2xl font-bold text-emerald-700">PHP {Number(selectedBooking.billingTotal || selectedBooking.paymentAmount || 0).toLocaleString()}</p></div>
-                <BillingBreakdown booking={selectedBooking} />
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+                  {(selectedBooking.billingStage === "gate_in" ||
+                  selectedBooking.status === "approved_area_assigned") && selectedBooking.loloPaymentStage !== "gate_out" ? (
+                    <>
+                      <p className="font-bold">Gate-In payment</p>
+                      <p className="mt-1 text-xs leading-5">
+                        This payment covers only Lift On / Lift Off. Storage and
+                        other charges will be billed at Gate-Out.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-bold">Gate-Out payment</p>
+                      <p className="mt-1 text-xs leading-5">
+                        {selectedBooking.loloPaymentStage === "gate_out"
+                          ? "This Gate-Out payment includes LOLO together with storage and other Gate-Out charges."
+                          : "This is the remaining Gate-Out balance after your approved Gate-In LOLO payment credit is applied."}
+                      </p>
+                    </>
+                  )}
+                </div>
+                <div className="rounded-xl bg-emerald-50 p-4">
+                  <p className="text-sm text-emerald-700">Amount to pay</p>
+                  <p className="mt-1 text-2xl font-bold text-emerald-700">
+                    PHP{" "}
+                    {Number(selectedBooking.paymentBalanceDue ?? selectedBooking.paymentAmount ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-200 p-4">
+                  <p className="text-sm font-bold text-slate-800">
+                    Billing preference
+                  </p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <label
+                      className={`cursor-pointer rounded-lg border p-3 ${payment.isVatApplicable ? "border-emerald-400 bg-emerald-50" : "border-slate-200"}`}
+                    >
+                      <input
+                        type="radio"
+                        className="mr-2"
+                        checked={payment.isVatApplicable}
+                        onChange={() =>
+                          setPayment((current) => ({
+                            ...current,
+                            isVatApplicable: true,
+                          }))
+                        }
+                      />
+                      VAT transaction
+                    </label>
+                    <label
+                      className={`cursor-pointer rounded-lg border p-3 ${!payment.isVatApplicable ? "border-amber-400 bg-amber-50" : "border-slate-200"}`}
+                    >
+                      <input
+                        type="radio"
+                        className="mr-2"
+                        checked={!payment.isVatApplicable}
+                        onChange={() =>
+                          setPayment((current) => ({
+                            ...current,
+                            isVatApplicable: false,
+                          }))
+                        }
+                      />
+                      Non-VAT transaction
+                    </label>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">
+                    VAT transactions receive an Official Receipt. Non-VAT
+                    transactions receive an Acknowledgement Receipt.
+                  </p>
+                </div>
+                <BillingBreakdown
+                  booking={{
+                    ...selectedBooking,
+                    isVatApplicable: payment.isVatApplicable,
+                    vatAmount: payment.isVatApplicable
+                      ? Number(selectedBooking.billingSubtotal || 0) *
+                        Number(selectedBooking.vatRate || 0.12)
+                      : 0,
+                    billingTotal: payment.isVatApplicable
+                      ? Number(selectedBooking.billingSubtotal || 0) *
+                        (1 + Number(selectedBooking.vatRate || 0.12))
+                      : Number(selectedBooking.billingSubtotal || 0),
+                  }}
+                />
                 <label className="block">
-                  <span className="mb-1.5 block text-sm font-medium text-slate-700">Payment Type <span className="text-red-500">*</span></span>
+                  <span className="mb-1.5 block text-sm font-medium text-slate-700">
+                    Bank Account <span className="text-red-500">*</span>
+                  </span>
                   <div className="relative" data-field-control>
                     <FiCreditCard className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <select className="input pl-10" value={payment.paymentTypeId} onChange={(event) => setPayment((current) => ({ ...current, paymentTypeId: event.target.value }))} required>
-                      <option value="">Select payment type</option>
-                      {availablePaymentTypes.map((item) => <option key={item.id} value={item.id}>{item.accountNumber ? `${item.name} • ${item.bankName || item.name} • ${item.accountNumber}` : item.name}</option>)}
+                    <select
+                      className="input input-with-leading-icon"
+                      value={payment.paymentTypeId}
+                      onChange={(event) =>
+                        setPayment((current) => ({
+                          ...current,
+                          paymentTypeId: event.target.value,
+                        }))
+                      }
+                      required
+                    >
+                      <option value="">Select bank account</option>
+                      {availablePaymentTypes.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.accountNumber
+                            ? `${item.bankName || item.name}`
+                            : item.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </label>
-                {payment.paymentTypeId && (() => {
-                  const selected = availablePaymentTypes.find((item) => item.id === payment.paymentTypeId);
-                  return selected ? (
-                    <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm">
-                      <p className="font-black text-emerald-900">{selected.name}</p>
-                      {selected.accountNumber ? <>
-                        <p className="mt-2 text-emerald-800">{selected.bankName || selected.name}</p>
-                        <p className="font-black text-emerald-900">{selected.accountNumber}</p>
-                        <p className="text-emerald-800">{selected.accountName}</p>
-                      </> : (
-                        <p className="mt-2 font-semibold text-emerald-800">{selected.instructions}</p>
-                      )}
-                      {selected.qrUrl && <a href={resolveFileUrl(selected.qrUrl)} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-black text-emerald-700">View QR Code</a>}
-                    </div>
-                  ) : null;
-                })()}
+                {payment.paymentTypeId &&
+                  (() => {
+                    const selected = availablePaymentTypes.find(
+                      (item) => item.id === payment.paymentTypeId,
+                    );
+                    return selected ? (
+                      <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm">
+                        <p className="font-black text-emerald-900">
+                          {selected.name}
+                        </p>
+                        {selected.accountNumber ? (
+                          <>
+                            <p className="mt-2 text-emerald-800">
+                              {selected.bankName || selected.name}
+                            </p>
+                            <p className="font-black text-emerald-900">
+                              {selected.accountNumber}
+                            </p>
+                            <p className="text-emerald-800">
+                              {selected.accountName}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="mt-2 font-semibold text-emerald-800">
+                            {selected.instructions}
+                          </p>
+                        )}
+                        {selected.qrUrl && (
+                          <a
+                            href={resolveFileUrl(selected.qrUrl)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-3 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-black text-emerald-700"
+                          >
+                            View QR Code
+                          </a>
+                        )}
+                      </div>
+                    ) : null;
+                  })()}
                 <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs font-semibold text-blue-700">
-                  Provide at least one verification detail: the transaction reference number or proof of payment.
+                  Proof of payment is required for every online payment. The
+                  transaction reference remains optional.
                 </div>
-                <InputText label="Payment Reference Number" name="paymentReferenceNumber" value={payment.paymentReferenceNumber} onChange={(event) => setPayment((current) => ({ ...current, paymentReferenceNumber: event.target.value }))} placeholder="Enter bank or e-wallet transaction reference" />
-                <InputFile label="Proof of Payment (Optional)" name="paymentProof" accept="image/*,.pdf" maxSize={10} onChange={(event) => setPayment((current) => ({ ...current, paymentProof: event.target.files?.[0] || null }))} />
-                <InputText label="Payment Remarks" name="paymentRemarks" value={payment.paymentRemarks} onChange={(event) => setPayment((current) => ({ ...current, paymentRemarks: event.target.value }))} placeholder="Optional notes" />
+                <InputText
+                  label="Payment Reference Number"
+                  name="paymentReferenceNumber"
+                  value={payment.paymentReferenceNumber}
+                  onChange={(event) =>
+                    setPayment((current) => ({
+                      ...current,
+                      paymentReferenceNumber: event.target.value,
+                    }))
+                  }
+                  placeholder="Enter bank transaction reference"
+                />
+                <InputFile
+                  label="Proof of Payment"
+                  name="paymentProof"
+                  accept="image/*,.pdf"
+                  maxSize={10}
+                  required
+                  onChange={(event) =>
+                    setPayment((current) => ({
+                      ...current,
+                      paymentProof: event.target.files?.[0] || null,
+                    }))
+                  }
+                />
+                <InputText
+                  label="Payment Remarks"
+                  name="paymentRemarks"
+                  value={payment.paymentRemarks}
+                  onChange={(event) =>
+                    setPayment((current) => ({
+                      ...current,
+                      paymentRemarks: event.target.value,
+                    }))
+                  }
+                  placeholder="Optional notes"
+                />
               </div>
             )}
 
             <div className="mt-6 flex justify-end gap-3">
-              <Button variant="outline" onClick={closeModal} disabled={submitting}>Close</Button>
-              {modal === "gateOut" && <Button variant="primary" onClick={submitGateOutRequest} loading={submitting} disabled={submitting}>Submit Gate-out</Button>}
-              {modal === "payment" && <Button variant="primary" onClick={submitPaymentProof} loading={submitting} disabled={submitting} icon={<FiDollarSign />}>Submit Payment</Button>}
+              <Button
+                variant="outline"
+                onClick={closeModal}
+                disabled={submitting}
+              >
+                Close
+              </Button>
+              {modal === "gateOut" && (
+                <Button
+                  variant="primary"
+                  onClick={submitGateOutRequest}
+                  loading={submitting}
+                  disabled={submitting}
+                >
+                  Submit Gate-out
+                </Button>
+              )}
+              {modal === "reversal" && (
+                <Button
+                  variant="primary"
+                  onClick={submitGateOutReversalRequest}
+                  loading={submitting}
+                  disabled={submitting || !reversalReason.trim()}
+                  icon={<FiRotateCcw />}
+                >
+                  Submit Reversal Request
+                </Button>
+              )}
+              {modal === "payment" && (
+                <Button
+                  variant="primary"
+                  onClick={submitPaymentProof}
+                  loading={submitting}
+                  disabled={submitting}
+                  icon={<FiDollarSign />}
+                >
+                  Submit Payment
+                </Button>
+              )}
             </div>
           </div>
         </div>

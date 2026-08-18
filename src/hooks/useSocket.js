@@ -4,9 +4,11 @@ import { SOCKET_URL } from "../lib/api"
 
 const realtimeEvents = [
   "socket:connected",
+  "notification:created",
   "client:registered",
   "client:approved",
   "client:rejected",
+  "client:resubmitted",
   "account:updated",
   "admin:user_created",
   "admin:user_updated",
@@ -40,13 +42,24 @@ const realtimeEvents = [
   "booking:approved",
   "booking:rejected",
   "booking:gate_in_approved",
+  "booking:gate_in_rejected",
   "booking:stored",
   "booking:billing_operation_updated",
+  "booking:congestion_surcharge_added",
+  "booking:additional_charge_added",
+  "booking:additional_charge_deleted",
   "booking:payment_submitted",
   "booking:payment_approved",
   "booking:payment_rejected",
+  "booking:cash_payment_recorded",
   "booking:gate_out_requested",
+  "booking:cancelled",
+  "booking:gate_out_rejected",
   "booking:gate_out_approved",
+  "booking:overstay_billing_recomputed",
+  "booking:gate_out_reversal_requested",
+  "booking:gate_out_reversal_approved",
+  "booking:gate_out_reversal_rejected",
   "booking:completed",
   "booking:relocated",
 ]
@@ -58,13 +71,13 @@ export const useSocket = ({ token, enabled = true }) => {
   useEffect(() => {
     if (!enabled || !token) return undefined
 
-    // WebSocket-only prevents service workers/Workbox and load balancers from
-    // caching or splitting the multi-request Socket.IO polling handshake.
+    // Prefer WebSocket, but keep Socket.IO polling as a deployment fallback.
+    // The server sends no-store headers for both transports.
     const socket = io(SOCKET_URL, {
       path: "/socket.io",
       auth: { token },
-      transports: ["websocket"],
-      upgrade: false,
+      transports: ["websocket", "polling"],
+      upgrade: true,
       rememberUpgrade: true,
       reconnection: true,
       reconnectionAttempts: 10,

@@ -12,6 +12,7 @@ const statusLabels = {
   stored_in_assigned_area: "Stored in Assigned Area",
   gate_out_requested: "Gate-Out Requested",
   gate_out_approved: "Gate-Out Approved",
+  gate_out_reversal_requested: "Gate-Out Reversal Requested",
   completed_gate_out_done: "Completed / Gate-Out Done",
   cancelled: "Cancelled",
 }
@@ -21,12 +22,13 @@ const billingLabels = {
   payment_submitted: "Payment Submitted",
   payment_under_review: "Payment Under Review",
   payment_rejected: "Payment Rejected",
+  additional_payment_required: "Additional Payment Required",
   paid_approved: "Paid / Approved",
 }
 
 const statusClass = (status) => {
   if (["completed_gate_out_done", "stored_in_assigned_area", "paid_approved"].includes(status)) return "bg-blue-50 text-blue-700"
-  if (["approved_area_assigned", "gate_in_approved", "gate_out_approved"].includes(status)) return "bg-blue-50 text-blue-700"
+  if (["approved_area_assigned", "gate_in_approved", "gate_out_approved", "gate_out_reversal_requested"].includes(status)) return "bg-blue-50 text-blue-700"
   if (["rejected", "cancelled", "payment_rejected"].includes(status)) return "bg-red-50 text-red-700"
   return "bg-amber-50 text-amber-700"
 }
@@ -132,6 +134,7 @@ const BookingLookupPage = () => {
                 <div className="flex flex-wrap gap-2">
                   <span className={`rounded-full px-3 py-1 text-xs font-black ${statusClass(booking.status)}`}>{statusLabels[booking.status] || booking.status}</span>
                   <span className={`rounded-full px-3 py-1 text-xs font-black ${statusClass(booking.billingStatus)}`}>{billingLabels[booking.billingStatus] || booking.billingStatus}</span>
+                  {booking.isOverstaying && <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-700">Overstaying</span>}
                 </div>
               </div>
 
@@ -155,7 +158,7 @@ const BookingLookupPage = () => {
                   <Detail label="Load Status" value={booking.containerLoadStatus} />
                   <Detail label="Shipping Line" value={booking.shippingLine} />
                   <Detail label="In Date" value={formatDate(getBookingInDate(booking))} />
-                  <Detail label="Requested Date Out" value={formatDate(getBookingOutDate(booking))} />
+                  <Detail label="Requested Date / Time Out" value={formatDate(getBookingOutDate(booking))} />
                   <Detail label="Truck Plate" value={booking.truckPlateNumber} />
                   <Detail label="Actual Container" value={booking.actualContainerNumber || booking.containerNumber} />
                 </div>
@@ -193,6 +196,9 @@ const BookingLookupPage = () => {
                   <Detail label="Payment Submitted" value={formatDate(booking.paymentSubmittedAt)} />
                   <Detail label="Total Bill Before Payment" value={(booking.billingTotal || booking.paymentAmount) ? `PHP ${Number(booking.billingTotal || booking.paymentAmount).toLocaleString()}` : "-"} />
                   <Detail label="Gate-Out Requested" value={formatDate(booking.gateOutRequestedAt)} />
+                  <Detail label="Gate-Out Schedule" value={booking.isOverstaying ? "Overstaying" : booking.gateOutScheduleStatus} />
+                  <Detail label="Overstay Started" value={formatDate(booking.gateOutOverstayStartedAt)} />
+                  <Detail label="Billing Computed As Of" value={formatDate(booking.billingComputedAt)} />
                   <Detail label="Released" value={formatDate(booking.releasedAt)} />
                 </div>
               </div>

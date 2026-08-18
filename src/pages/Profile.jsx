@@ -114,7 +114,7 @@ const Profile = () => {
       {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="bg-gradient-to-br from-emerald-600 to-blue-700 p-6 text-white md:p-8">
+        <div className="bg-gradient-to-br from-emerald-700 to-emerald-950 p-6 text-white md:p-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm text-emerald-100">Registered company</p>
@@ -164,7 +164,8 @@ const Profile = () => {
                 ].map(([name, label]) => (
                   <label key={name} className="rounded-xl border border-slate-200 p-3">
                     <span className="block text-sm font-semibold text-slate-700">{label}</span>
-                    <input type="file" accept=".pdf,.doc,.docx,image/*" className="mt-2 block w-full text-sm" onChange={(event) => setFiles((current) => ({ ...current, [name]: event.target.files?.[0] || null }))} />
+                    <input type="file" accept=".pdf,.doc,.docx,image/*" className="mt-2 block w-full text-sm" onChange={(event) => { const file = event.target.files?.[0] || null; if (file && file.size > 10 * 1024 * 1024) { event.target.value = ""; window.alert("File size exceeds the 10 MB maximum upload size."); return; } setFiles((current) => ({ ...current, [name]: file })); }} />
+                    <span className="mt-1 block text-xs text-slate-500">Maximum file size: 10 MB</span>
                   </label>
                 ))}
               </div>

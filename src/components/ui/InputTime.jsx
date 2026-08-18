@@ -1,5 +1,6 @@
 // components/ui/InputTime.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   FiAlertCircle,
   FiCheck,
@@ -31,13 +32,14 @@ const InputTime = ({
   ...props
 }) => {
   const wrapperRef = useRef(null);
+  const pickerRef = useRef(null);
   const manualHourRef = useRef(null);
   const manualMinuteRef = useRef(null);
 
   const [isOpen, setIsOpen] = useState(false);
   const [isManualInput, setIsManualInput] = useState(false);
   const [manualError, setManualError] = useState("");
-  const [pickerPlacement, setPickerPlacement] = useState("bottom");
+  const [pickerPosition, setPickerPosition] = useState({ left: 12, width: 390, top: 12 });
 
   const [selectedHour, setSelectedHour] = useState(12);
   const [selectedMinute, setSelectedMinute] = useState(0);
@@ -149,7 +151,10 @@ const InputTime = ({
     if (!isOpen) return undefined;
 
     const handleOutsideClick = (event) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+      const clickedTrigger = wrapperRef.current?.contains(event.target);
+      const clickedPicker = pickerRef.current?.contains(event.target);
+
+      if (!clickedTrigger && !clickedPicker) {
         handleCancel();
       }
     };
@@ -168,6 +173,99 @@ const InputTime = ({
       document.removeEventListener("keydown", handleEscape);
     };
   }, [isOpen, selectedHour, selectedMinute, selectedPeriod]);
+
+  const updatePickerPosition = () => {
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const visualViewport = window.visualViewport;
+    const viewportWidth = visualViewport?.width || window.innerWidth;
+    const viewportHeight = visualViewport?.height || window.innerHeight;
+    const viewportOffsetLeft = visualViewport?.offsetLeft || 0;
+    const viewportOffsetTop = visualViewport?.offsetTop || 0;
+    const viewportPadding = 12;
+    const pickerGap = 8;
+    const maximumViewportHeight = Math.max(180, viewportHeight - viewportPadding * 2);
+    const preferredWidth = viewportWidth >= 640 ? 390 : rect.width;
+    const width = Math.min(
+      Math.max(Math.min(290, viewportWidth - viewportPadding * 2), preferredWidth),
+      viewportWidth - viewportPadding * 2,
+    );
+    const minimumLeft = viewportOffsetLeft + viewportPadding;
+    const maximumLeft = viewportOffsetLeft + viewportWidth - width - viewportPadding;
+    const left = Math.min(
+      Math.max(rect.left + viewportOffsetLeft, minimumLeft),
+      Math.max(maximumLeft, minimumLeft),
+    );
+
+    const measuredHeight = pickerRef.current?.scrollHeight || (isHourlyOnly ? 430 : 620);
+    const desiredHeight = Math.min(measuredHeight, maximumViewportHeight);
+    const triggerTop = rect.top + viewportOffsetTop;
+    const triggerBottom = rect.bottom + viewportOffsetTop;
+    const viewportTop = viewportOffsetTop + viewportPadding;
+    const viewportBottom = viewportOffsetTop + viewportHeight - viewportPadding;
+    const spaceBelow = Math.max(0, viewportBottom - triggerBottom - pickerGap);
+    const spaceAbove = Math.max(0, triggerTop - viewportTop - pickerGap);
+    const fitsBelow = spaceBelow >= desiredHeight;
+    const fitsAbove = spaceAbove >= desiredHeight;
+
+    let top = viewportTop;
+    let maxHeight = maximumViewportHeight;
+
+    if (fitsBelow) {
+      top = triggerBottom + pickerGap;
+      maxHeight = desiredHeight;
+    } else if (fitsAbove) {
+      maxHeight = desiredHeight;
+      top = triggerTop - pickerGap - maxHeight;
+    } else {
+      const openAbove = spaceAbove > spaceBelow;
+      const availableHeight = openAbove ? spaceAbove : spaceBelow;
+
+      if (availableHeight >= 180) {
+        maxHeight = Math.min(desiredHeight, availableHeight);
+        top = openAbove
+          ? triggerTop - pickerGap - maxHeight
+          : triggerBottom + pickerGap;
+      }
+    }
+
+    setPickerPosition({
+      left,
+      top: Math.min(
+        Math.max(viewportTop, top),
+        Math.max(viewportBottom - maxHeight, viewportTop),
+      ),
+      width,
+      maxHeight,
+    });
+  };
+
+  useLayoutEffect(() => {
+    if (!isOpen) return undefined;
+
+    const frame = window.requestAnimationFrame(updatePickerPosition);
+    return () => window.cancelAnimationFrame(frame);
+  }, [isOpen, isHourlyOnly]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const reposition = () => updatePickerPosition();
+    const visualViewport = window.visualViewport;
+
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    visualViewport?.addEventListener("resize", reposition);
+    visualViewport?.addEventListener("scroll", reposition);
+
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+      visualViewport?.removeEventListener("resize", reposition);
+      visualViewport?.removeEventListener("scroll", reposition);
+    };
+  }, [isOpen, isHourlyOnly]);
 
   useEffect(() => {
     if (isOpen && isManualInput && manualHourRef.current) {
@@ -212,13 +310,7 @@ const InputTime = ({
   const openPicker = () => {
     if (disabled) return;
 
-    const rect = wrapperRef.current?.getBoundingClientRect();
-    if (rect) {
-      const estimatedPickerHeight = isHourlyOnly ? 430 : 620;
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
-      setPickerPlacement(spaceBelow < estimatedPickerHeight && spaceAbove > spaceBelow ? "top" : "bottom");
-    }
+    updatePickerPosition();
 
     syncTemporaryValues(selectedHour, isHourlyOnly ? 0 : selectedMinute, selectedPeriod);
     setIsManualInput(false);
@@ -502,16 +594,19 @@ const InputTime = ({
           </span>
         </button>
 
-        {isOpen && !disabled && (
+        {isOpen &&
+          !disabled &&
+          typeof document !== "undefined" &&
+          createPortal(
           <div
+            ref={pickerRef}
             role="dialog"
             aria-label="Choose time"
+            style={pickerPosition}
             className={[
-              "absolute left-0 z-50 w-full min-w-[290px]",
-              pickerPlacement === "top" ? "bottom-full mb-3" : "top-full mt-3",
-              "overflow-hidden rounded-3xl border border-slate-200",
+              "fixed z-[10000] min-w-0",
+              "overflow-y-auto overflow-x-hidden rounded-3xl border border-slate-200",
               "bg-white shadow-2xl shadow-slate-300/50",
-              "sm:w-[390px]",
             ].join(" ")}
           >
             <div className="border-b border-slate-100 bg-gradient-to-r from-emerald-50 via-white to-blue-50 px-4 py-4 sm:px-5">
@@ -810,7 +905,8 @@ const InputTime = ({
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body,
         )}
       </div>
 

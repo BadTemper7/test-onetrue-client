@@ -1,173 +1,116 @@
-// pages/About.jsx
-import React from "react";
 import {
-  FiTruck,
-  FiPackage,
-  FiGlobe,
-  FiShield,
-  FiClock,
-  FiUsers,
   FiAward,
-  FiHeart,
-  FiTrendingUp,
   FiCheckCircle,
-  FiBriefcase,
-} from "react-icons/fi";
+  FiCompass,
+  FiEye,
+  FiHeart,
+  FiMapPin,
+  FiShield,
+  FiTarget,
+  FiTrendingUp,
+  FiUsers,
+  FiZap,
+} from "react-icons/fi"
+import { companyOverview, coreValues, services, whyChooseUs } from "../constants/companyProfile"
 
-const About = () => {
-  const features = [
-    {
-      icon: FiGlobe,
-      title: "Global Network",
-      description:
-        "Access to shipping networks across the globe with reliable partners.",
-    },
-    {
-      icon: FiShield,
-      title: "Secure Shipping",
-      description: "Your shipments are protected with insurance and tracking.",
-    },
-    {
-      icon: FiClock,
-      title: "Real-time Tracking",
-      description:
-        "Track your shipments in real-time with our advanced system.",
-    },
-    {
-      icon: FiUsers,
-      title: "Expert Team",
-      description:
-        "Dedicated professionals ensuring your shipments arrive safely.",
-    },
-  ];
+const valueIcons = [FiShield, FiCheckCircle, FiHeart, FiAward, FiZap, FiUsers]
+const strengthIcons = [FiMapPin, FiShield, FiZap, FiUsers, FiTrendingUp, FiHeart, FiCheckCircle, FiAward]
 
-  const stats = [
-    { label: "Shipments Delivered", value: "50,000+" },
-    { label: "Happy Clients", value: "2,500+" },
-    { label: "Countries Served", value: "50+" },
-    { label: "Years of Experience", value: "10+" },
-  ];
+const About = () => (
+  <div className="mx-auto max-w-7xl space-y-8">
+    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl">
+      <div className="grid lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="p-7 sm:p-10 lg:p-14">
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-700">About One True Logistics Inc.</p>
+          <h1 className="mt-4 text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">Your trusted container depot and logistics partner</h1>
+          <p className="mt-5 text-base leading-7 text-slate-600 sm:text-lg">{companyOverview.summary}</p>
+          <div className="mt-7 grid gap-3 sm:grid-cols-2">
+            {services.slice(0, 6).map((service) => (
+              <div key={service} className="flex items-start gap-3 rounded-xl bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700">
+                <FiCheckCircle className="mt-0.5 shrink-0 text-emerald-600" />
+                {service}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="relative min-h-[420px] bg-emerald-950 lg:min-h-full">
+          <img src="/images/company/container-handler.webp" alt="One True Logistics container handling operation" className="absolute inset-0 h-full w-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-emerald-950/80 via-transparent to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 p-7 text-white sm:p-9">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-xs font-black uppercase tracking-[0.18em] backdrop-blur-sm"><FiMapPin /> Port Area, Manila</div>
+            <p className="mt-3 max-w-md text-sm leading-6 text-emerald-50">A secured, process-driven facility supporting efficient container handling and dependable logistics operations.</p>
+          </div>
+        </div>
+      </div>
+    </section>
 
-  const values = [
-    {
-      icon: FiAward,
-      title: "Excellence",
-      description: "We strive for excellence in every shipment we handle.",
-    },
-    {
-      icon: FiHeart,
-      title: "Integrity",
-      description: "Honest and transparent operations with our clients.",
-    },
-    {
-      icon: FiTrendingUp,
-      title: "Innovation",
-      description: "Leveraging technology to improve logistics efficiency.",
-    },
-    {
-      icon: FiUsers,
-      title: "Customer Focus",
-      description: "Putting our clients at the heart of everything we do.",
-    },
-  ];
+    <section className="grid gap-5 lg:grid-cols-3">
+      <article className="rounded-2xl border border-emerald-100 bg-emerald-50 p-6">
+        <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-700 text-white"><FiCompass className="h-6 w-6" /></span>
+        <p className="mt-5 text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Our purpose</p>
+        <p className="mt-2 leading-7 text-slate-700">{companyOverview.purpose}</p>
+      </article>
+      <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 text-white"><FiEye className="h-6 w-6" /></span>
+        <p className="mt-5 text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Our vision</p>
+        <p className="mt-2 leading-7 text-slate-700">{companyOverview.vision}</p>
+      </article>
+      <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-700 text-white"><FiTarget className="h-6 w-6" /></span>
+        <p className="mt-5 text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Our mission</p>
+        <p className="mt-2 leading-7 text-slate-700">{companyOverview.mission}</p>
+      </article>
+    </section>
 
-  return (
-    <div className="max-w-6xl mx-auto space-y-8">
-      {/* Hero Section */}
-      <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl p-8 md:p-12 text-white">
+    <section className="relative overflow-hidden rounded-[2rem] bg-slate-950 text-white shadow-xl">
+      <img src="/images/company/values-yard.webp" alt="Container handler operating in the One True Logistics yard" className="absolute inset-0 h-full w-full object-cover opacity-30" />
+      <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/95 to-slate-950/55" />
+      <div className="relative p-7 sm:p-10 lg:p-12">
         <div className="max-w-3xl">
-          <h1 className="text-3xl md:text-4xl font-bold mb-4">
-            About Our Client Portal
-          </h1>
-          <p className="text-emerald-100 text-base md:text-lg">
-            We provide comprehensive shipping and logistics solutions to clients
-            worldwide. Our platform makes it easy to book, track, and manage
-            your shipments efficiently.
-          </p>
-          <div className="flex flex-wrap gap-4 mt-6">
-            <div className="flex items-center space-x-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/20">
-              <FiCheckCircle className="h-5 w-5" />
-              <span className="text-sm">Trusted Partner</span>
-            </div>
-            <div className="flex items-center space-x-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/20">
-              <FiBriefcase className="h-5 w-5" />
-              <span className="text-sm">10+ Years Experience</span>
-            </div>
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-amber-300">Vision, mission and core values</p>
+          <h2 className="mt-3 text-3xl font-black sm:text-4xl">Driven by our purpose, guided by our values</h2>
+          <p className="mt-3 leading-7 text-slate-300">Our values shape how we work, how we serve clients, and how we make decisions throughout every logistics operation.</p>
+        </div>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {coreValues.map((value, index) => {
+            const Icon = valueIcons[index] || FiCheckCircle
+            return (
+              <article key={value.title} className="rounded-2xl border border-white/10 bg-white/10 p-5 backdrop-blur-sm">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-700 text-white"><Icon className="h-5 w-5" /></span>
+                <h3 className="mt-4 text-lg font-black">{value.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-300">{value.description}</p>
+              </article>
+            )
+          })}
+        </div>
+      </div>
+    </section>
+
+    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+      <div className="grid lg:grid-cols-[0.9fr_1.1fr]">
+        <img src="/images/company/why-choose.webp" alt="Container handling equipment and stacked containers" className="h-full min-h-[360px] w-full object-cover" />
+        <div className="p-7 sm:p-10">
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-700">Why choose One True Logistics?</p>
+          <h2 className="mt-3 text-3xl font-black text-slate-950">More than a depot. A dependable supply-chain partner.</h2>
+          <p className="mt-3 leading-7 text-slate-600">We combine strategic location, capable people, modern equipment, and structured systems to deliver reliable service and build long-term partnerships.</p>
+          <div className="mt-7 grid gap-4 sm:grid-cols-2">
+            {whyChooseUs.map((item, index) => {
+              const Icon = strengthIcons[index] || FiCheckCircle
+              return (
+                <article key={item.title} className="flex gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700"><Icon className="h-5 w-5" /></span>
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900">{item.title}</h3>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">{item.description}</p>
+                  </div>
+                </article>
+              )
+            })}
           </div>
         </div>
       </div>
+    </section>
+  </div>
+)
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {stats.map((stat, index) => (
-          <div
-            key={index}
-            className="bg-white rounded-xl shadow-sm p-6 text-center border border-gray-100"
-          >
-            <p className="text-2xl md:text-3xl font-bold text-emerald-600">
-              {stat.value}
-            </p>
-            <p className="text-sm text-gray-500 mt-1">{stat.label}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Features */}
-      <div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-4">Why Choose Us</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {features.map((feature, index) => (
-            <div
-              key={index}
-              className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow"
-            >
-              <div className="bg-emerald-50 p-3 rounded-lg inline-block mb-4">
-                <feature.icon className="h-6 w-6 text-emerald-600" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                {feature.title}
-              </h3>
-              <p className="text-sm text-gray-600">{feature.description}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Our Values */}
-      <div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-4">Our Values</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {values.map((value, index) => (
-            <div
-              key={index}
-              className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 text-center"
-            >
-              <div className="bg-emerald-50 p-3 rounded-full inline-block mb-4">
-                <value.icon className="h-6 w-6 text-emerald-600" />
-              </div>
-              <h3 className="text-base font-semibold text-gray-800 mb-2">
-                {value.title}
-              </h3>
-              <p className="text-sm text-gray-600">{value.description}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* CTA Section */}
-      <div className="bg-gray-50 rounded-2xl p-8 text-center border border-gray-200">
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">
-          Ready to Ship?
-        </h2>
-        <p className="text-gray-600 mb-4">
-          Book your shipment now and experience seamless logistics.
-        </p>
-        <button className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg shadow-lg shadow-emerald-200/50 transition-all duration-200">
-          Get Started
-        </button>
-      </div>
-    </div>
-  );
-};
-
-export default About;
+export default About

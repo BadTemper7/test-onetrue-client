@@ -63,6 +63,7 @@ const Booking = () => {
     truckPlateNumber: "",
     driverName: "",
     driverLicenseNumber: "",
+    hauler: "",
     blNumber: "",
     vesselVoyage: "",
     weight: "",
@@ -113,6 +114,7 @@ const Booking = () => {
       truckPlateNumber: "Truck plate number is required",
       driverName: "Driver name is required",
       driverLicenseNumber: "Driver license number is required",
+      hauler: "Hauler is required",
       weight: "Container weight is required",
     };
 
@@ -193,6 +195,7 @@ const Booking = () => {
       "truckPlateNumber",
       "driverName",
       "driverLicenseNumber",
+      "hauler",
       "weight",
     ]);
 
@@ -265,6 +268,7 @@ const Booking = () => {
         truckPlateNumber: formData.truckPlateNumber,
         driverName: formData.driverName,
         driverLicenseNumber: formData.driverLicenseNumber,
+        hauler: formData.hauler,
         blNumber: formData.blNumber,
         vesselVoyage: formData.vesselVoyage,
         cargoDescription: formData.cargoDescription,
@@ -299,6 +303,7 @@ const Booking = () => {
         truckPlateNumber: "",
         driverName: "",
         driverLicenseNumber: "",
+        hauler: "",
         blNumber: "",
         vesselVoyage: "",
         weight: "",
@@ -314,6 +319,7 @@ const Booking = () => {
         ["arrival", "scheduledDateIn", 1],
         ["truck", "truckPlateNumber", 2],
         ["driver", "driverName", 2],
+        ["hauler", "hauler", 2],
         ["delivery order", "deliveryOrder", 3],
         ["booking confirmation", "bookingConfirmation", 3],
       ];
@@ -552,6 +558,18 @@ const Booking = () => {
         placeholder="Enter driver's license number"
         required
         icon={<FiFileText className="h-5 w-5 text-gray-400" />}
+      />
+
+      <InputText
+        label="Hauler"
+        name="hauler"
+        value={formData.hauler}
+        onChange={handleChange}
+        onBlur={handleBlur}
+        error={errors.hauler}
+        placeholder="Enter hauler company or operator"
+        required
+        icon={<FiTruck className="h-5 w-5 text-gray-400" />}
       />
 
       <InputText

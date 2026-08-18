@@ -59,6 +59,26 @@ export const useBookingStore = create((set, get) => ({
     }
   },
 
+  requestGateOutReversal: async (bookingId, payload) => {
+    set({ submitting: true, error: "" });
+    try {
+      const { data } = await api.post(
+        `/client/bookings/${bookingId}/gate-out-reversal-request`,
+        payload,
+      );
+      set({
+        bookings: get().bookings.map((item) =>
+          item.id === bookingId ? data.booking : item,
+        ),
+        submitting: false,
+      });
+      return data;
+    } catch (error) {
+      set({ submitting: false, error: getApiError(error) });
+      throw error;
+    }
+  },
+
   submitPayment: async (bookingId, payload) => {
     set({ submitting: true, error: "" });
     try {
@@ -66,6 +86,7 @@ export const useBookingStore = create((set, get) => ({
       if (payload.paymentTypeId) formData.append("paymentTypeId", payload.paymentTypeId);
       if (payload.paymentReferenceNumber) formData.append("paymentReferenceNumber", payload.paymentReferenceNumber);
       if (payload.paymentRemarks) formData.append("paymentRemarks", payload.paymentRemarks);
+      formData.append("isVatApplicable", String(payload.isVatApplicable !== false));
       if (payload.paymentProof) formData.append("paymentProof", payload.paymentProof);
 
       const { data } = await api.post(
