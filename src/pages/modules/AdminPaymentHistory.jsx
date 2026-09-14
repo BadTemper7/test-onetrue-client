@@ -8,6 +8,7 @@ import TableCrudActions from "../../components/ui/TableCrudActions"
 import { usePagination } from "../../hooks/usePagination"
 import { api, getApiError } from "../../lib/api"
 import { printBookingDocument } from "../../lib/printDocument"
+import TableLoadingRow from "../../components/ui/TableLoadingRow"
 
 const money = (value) => `PHP ${Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const formatDate = (value) => value ? new Date(value).toLocaleString("en-PH") : "-"
@@ -99,6 +100,7 @@ const AdminPaymentHistory = ({ mode = "history" }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
+              {loading && filtered.length === 0 && <TableLoadingRow colSpan={7} rows={6} actionColumn label="Loading payment history" />}
               {pagination.paginatedItems.map((item) => (
                 <tr key={item.id} className="hover:bg-slate-50">
                   <td className="px-4 py-4"><p className="font-black text-emerald-700">{item.bookingReference}</p><p className="text-xs text-slate-500">{formatDate(item.paymentDate)}</p></td>

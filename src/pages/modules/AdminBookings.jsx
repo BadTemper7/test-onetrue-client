@@ -4,7 +4,6 @@ import {
   Boxes,
   CalendarDays,
   CheckCircle2,
-  LoaderCircle,
   RefreshCw,
   Search,
   SlidersHorizontal,
@@ -19,6 +18,7 @@ import { usePagination } from "../../hooks/usePagination"
 import { api, getApiError } from "../../lib/api"
 import { useAuthStore } from "../../stores/authStore"
 import { hasModulePermission } from "../../lib/permissions"
+import TableLoadingRow from "../../components/ui/TableLoadingRow"
 
 const statusLabels = {
   pending_admin_approval: "Pending Admin Approval",
@@ -250,19 +250,7 @@ const AdminBookings = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading && bookings.length === 0 && (
-                <tr>
-                  <td colSpan="8" className="px-5 py-16">
-                    <div className="flex flex-col items-center justify-center gap-3 text-center" role="status" aria-live="polite">
-                      <LoaderCircle size={34} className="animate-spin text-emerald-600" />
-                      <div>
-                        <p className="font-black text-slate-800">Loading container tracking data</p>
-                        <p className="mt-1 text-xs font-semibold text-slate-500">Please wait while the latest bookings are being retrieved.</p>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              )}
+              {loading && bookings.length === 0 && <TableLoadingRow colSpan={8} rows={7} actionColumn label="Loading container tracking data" />}
               {(!loading || bookings.length > 0) && pagination.paginatedItems.map((booking) => (
                 <tr key={booking.id} className="align-top transition hover:bg-slate-50/80">
                   <td className="px-5 py-4">

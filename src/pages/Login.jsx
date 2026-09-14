@@ -274,12 +274,12 @@ const Login = () => {
                   size="sm"
                 />
               </div>
-              <a
-                href="#"
+              <Link
+                to="/forgot-password"
                 className="text-sm text-emerald-500 hover:text-emerald-600 font-medium transition-colors"
               >
                 Forgot password?
-              </a>
+              </Link>
             </div>
 
             <Button

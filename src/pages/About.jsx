@@ -44,6 +44,16 @@ const About = () => (
       </div>
     </section>
 
+    <section className="overflow-hidden rounded-[2rem] border border-amber-200 bg-amber-50 shadow-sm">
+      <div className="p-7 sm:p-10">
+        <p className="text-xs font-black uppercase tracking-[0.22em] text-amber-700">Client service acknowledgment</p>
+        <h2 className="mt-3 text-2xl font-black text-slate-950 sm:text-3xl">Yard Services and Client Responsibility</h2>
+        <p className="mt-4 text-sm leading-7 text-slate-700 sm:text-base">
+          The Client hereby engages and requests the services of One True Logistics Inc. in connection with, but not limited to, the receiving, storage, stripping, stuffing, loading, unloading, lifting, shifting, transferring, hauling, container handling, and all other activities and services provided by One True Logistics Inc. involving the Client&apos;s cargo, containers, equipment, and other properties within the One True Logistics Inc. Yard. The Client acknowledges and agrees that all such activities and services are undertaken at the Client&apos;s own risk and responsibility. One True Logistics Inc. shall not be held liable or responsible for any loss, damage, deterioration, shortage, delay, or any other loss or consequence arising from or in connection with such activities or services, except in cases of proven gross negligence or willful misconduct by One True Logistics Inc.
+        </p>
+      </div>
+    </section>
+
     <section className="grid gap-5 lg:grid-cols-3">
       <article className="rounded-2xl border border-emerald-100 bg-emerald-50 p-6">
         <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-700 text-white"><FiCompass className="h-6 w-6" /></span>

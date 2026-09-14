@@ -5,6 +5,7 @@ import ModalCloseButton from "../../components/ui/ModalCloseButton"
 import { api, getApiError } from "../../lib/api"
 import Pagination from "../../components/ui/Pagination"
 import TableActionButton from "../../components/ui/TableActionButton"
+import TableLoadingRow from "../../components/ui/TableLoadingRow"
 import TableCrudActions from "../../components/ui/TableCrudActions"
 import { usePagination } from "../../hooks/usePagination"
 import { useClickOutside } from "../../hooks/useClickOutside"
@@ -55,8 +56,6 @@ const formatDate = (value) => {
   if (!value) return "-"
   return new Date(value).toLocaleString()
 }
-
-const getTeu = (size) => Number(size) === 40 ? 2 : 1
 
 const getInventoryEnteredTime = (container) => {
   const value = container.inventoryEnteredAt
@@ -187,12 +186,15 @@ const AdminInventory = () => {
   const [areas, setAreas] = useState([])
   const [containers, setContainers] = useState([])
   const [summary, setSummary] = useState(null)
+  const [inventoryStats, setInventoryStats] = useState({ totalContainers: 0, waitingStorage: 0, inventoryTeu: 0, inventoryFeu: 0 })
+  const [inventoryTruncated, setInventoryTruncated] = useState(false)
   const [selectedAreaId, setSelectedAreaId] = useState("")
   const [selectedStatus, setSelectedStatus] = useState("all")
   const [search, setSearch] = useState("")
   const [showFilters, setShowFilters] = useState(false)
   const filterRef = useRef(null)
   const [loading, setLoading] = useState(true)
+  const [tableLoading, setTableLoading] = useState(true)
   const [alert, setAlert] = useState({ type: "", message: "" })
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -204,6 +206,12 @@ const AdminInventory = () => {
   const [modalSlots, setModalSlots] = useState([])
   const [loadingBlocks, setLoadingBlocks] = useState(false)
   const [savingLocation, setSavingLocation] = useState(false)
+  const inventoryRequestRef = useRef(0)
+  const inventoryAbortRef = useRef(null)
+  const inventoryInFlightRef = useRef({ key: "", promise: null })
+  const initialLoadStartedRef = useRef(false)
+  const realtimeRefreshTimerRef = useRef(null)
+  const realtimeRefreshFlagsRef = useRef({ inventory: false, yard: false })
   const user = useAuthStore((state) => state.user)
   const canDeleteBooking = hasModulePermission(user, "operations", "delete")
 
@@ -227,15 +235,16 @@ const AdminInventory = () => {
     })
   }, [bookingContainers, selectedAreaId, selectedStatus, search])
 
+  const inventoryFilterKey = `${selectedAreaId}|${selectedStatus}|${search.trim()}`
+  const inventoryFilterRef = useRef(null)
+  inventoryFilterRef.current = { selectedAreaId, selectedStatus, search: search.trim() }
+  const lastRequestedFilterKeyRef = useRef(inventoryFilterKey)
+
   const containerPagination = usePagination(
     filteredContainers,
     10,
-    `${selectedAreaId}|${selectedStatus}|${search}`,
+    inventoryFilterKey,
   )
-
-  const waitingForStorage = bookingContainers.filter((container) => container.bookingStatus === "gate_in_approved")
-  const storedContainers = bookingContainers.filter((container) => ["stored_in_assigned_area", "gate_out_requested", "gate_out_approved", "gate_out_reversal_requested"].includes(container.bookingStatus))
-  const assignedTeu = bookingContainers.reduce((sum, container) => sum + getTeu(container.containerSize), 0)
 
   const loadAreas = async () => {
     const { data } = await api.get("/admin/inventory/areas")
@@ -247,36 +256,136 @@ const AdminInventory = () => {
     setSummary(data.summary || null)
   }
 
-  const loadContainers = async () => {
-    const { data } = await api.get("/admin/inventory/containers")
-    setContainers(data.containers || [])
+  const loadContainers = async ({ includeStats = false } = {}) => {
+    const filters = inventoryFilterRef.current || {}
+    const params = new URLSearchParams({
+      source: "booking",
+      limit: "120",
+      includeStats: includeStats ? "true" : "false",
+    })
+    if (filters.selectedAreaId) params.set("areaId", filters.selectedAreaId)
+    if (filters.selectedStatus && filters.selectedStatus !== "all") params.set("status", filters.selectedStatus)
+    if (filters.search) params.set("search", filters.search)
+
+    const requestKey = params.toString()
+    const currentInFlight = inventoryInFlightRef.current
+    if (currentInFlight.promise && currentInFlight.key === requestKey) return currentInFlight.promise
+
+    if (inventoryAbortRef.current) inventoryAbortRef.current.abort()
+    const controller = new AbortController()
+    inventoryAbortRef.current = controller
+    const requestId = ++inventoryRequestRef.current
+
+    setTableLoading(true)
+    let requestPromise
+    requestPromise = api.get(`/admin/inventory/containers?${requestKey}`, { signal: controller.signal })
+      .then(({ data }) => {
+        if (requestId !== inventoryRequestRef.current) return
+        setContainers(data.containers || [])
+        if (data.stats) {
+          setInventoryStats({
+            totalContainers: Number(data.stats.totalContainers) || 0,
+            waitingStorage: Number(data.stats.waitingStorage) || 0,
+            inventoryTeu: Number(data.stats.inventoryTeu) || 0,
+            inventoryFeu: Number(data.stats.inventoryFeu) || 0,
+          })
+        }
+        setInventoryTruncated(Boolean(data.truncated))
+      })
+      .catch((error) => {
+        if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError" || controller.signal.aborted) return
+        throw error
+      })
+      .finally(() => {
+        if (inventoryInFlightRef.current.promise === requestPromise) inventoryInFlightRef.current = { key: "", promise: null }
+        if (inventoryAbortRef.current === controller) inventoryAbortRef.current = null
+        if (requestId === inventoryRequestRef.current) setTableLoading(false)
+      })
+
+    inventoryInFlightRef.current = { key: requestKey, promise: requestPromise }
+    return requestPromise
   }
 
   const loadAll = async () => {
     try {
       setLoading(true)
       setAlert({ type: "", message: "" })
-      await Promise.all([loadAreas(), loadSummary(), loadContainers()])
+      await Promise.all([loadAreas(), loadSummary(), loadContainers({ includeStats: true })])
     } catch (error) {
-      setAlert({ type: "error", message: getApiError(error) })
+      if (error?.code !== "ERR_CANCELED" && error?.name !== "CanceledError") {
+        setAlert({ type: "error", message: getApiError(error) })
+      }
     } finally {
       setLoading(false)
     }
   }
 
+  const refreshInventory = async ({ refreshYard = false } = {}) => {
+    if (realtimeRefreshTimerRef.current) {
+      window.clearTimeout(realtimeRefreshTimerRef.current)
+      realtimeRefreshTimerRef.current = null
+      realtimeRefreshFlagsRef.current = { inventory: false, yard: false }
+    }
+    const jobs = [loadContainers({ includeStats: true })]
+    if (refreshYard) jobs.push(loadAreas(), loadSummary())
+    return Promise.all(jobs)
+  }
+
   useEffect(() => {
+    if (initialLoadStartedRef.current) return
+    initialLoadStartedRef.current = true
     loadAll()
   }, [])
 
   useEffect(() => {
+    if (lastRequestedFilterKeyRef.current === inventoryFilterKey) return undefined
+
+    const timer = window.setTimeout(() => {
+      lastRequestedFilterKeyRef.current = inventoryFilterKey
+      loadContainers({ includeStats: false }).catch((error) => {
+        if (error?.code !== "ERR_CANCELED" && error?.name !== "CanceledError") {
+          setAlert({ type: "error", message: getApiError(error) })
+        }
+      })
+    }, 350)
+
+    return () => window.clearTimeout(timer)
+  }, [inventoryFilterKey])
+
+  useEffect(() => {
     const handleRealtime = (event) => {
       const eventType = event.detail?.type || ""
-      if (!eventType.startsWith("booking:") && !eventType.startsWith("inventory:") && !eventType.startsWith("storage:") && !eventType.startsWith("yard:")) return
-      loadAll()
+      const yardChanged = eventType.startsWith("yard:") || eventType.startsWith("inventory:block_")
+      const inventoryChanged = eventType.startsWith("booking:")
+        || eventType.startsWith("storage:")
+        || ["inventory:container_assigned", "inventory:container_created", "inventory:legacy_container_created", "inventory:updated"].includes(eventType)
+      if (!inventoryChanged && !yardChanged) return
+
+      realtimeRefreshFlagsRef.current = {
+        inventory: realtimeRefreshFlagsRef.current.inventory || inventoryChanged,
+        yard: realtimeRefreshFlagsRef.current.yard || yardChanged,
+      }
+      if (realtimeRefreshTimerRef.current) window.clearTimeout(realtimeRefreshTimerRef.current)
+      realtimeRefreshTimerRef.current = window.setTimeout(() => {
+        const flags = realtimeRefreshFlagsRef.current
+        realtimeRefreshFlagsRef.current = { inventory: false, yard: false }
+        realtimeRefreshTimerRef.current = null
+        const jobs = []
+        if (flags.inventory) jobs.push(loadContainers({ includeStats: true }))
+        if (flags.yard) jobs.push(loadAreas(), loadSummary())
+        Promise.all(jobs).catch((error) => {
+          if (error?.code !== "ERR_CANCELED" && error?.name !== "CanceledError") {
+            setAlert({ type: "error", message: getApiError(error) })
+          }
+        })
+      }, 400)
     }
 
     window.addEventListener("otli:realtime", handleRealtime)
-    return () => window.removeEventListener("otli:realtime", handleRealtime)
+    return () => {
+      window.removeEventListener("otli:realtime", handleRealtime)
+      if (realtimeRefreshTimerRef.current) window.clearTimeout(realtimeRefreshTimerRef.current)
+    }
   }, [])
 
   const loadBlocksForArea = async (areaId) => {
@@ -369,7 +478,7 @@ const AdminInventory = () => {
       })
       setAlert({ type: "success", message: "Container location updated successfully." })
       closeLocationModal()
-      await loadAll()
+      await refreshInventory({ refreshYard: true })
     } catch (error) {
       setAlert({ type: "error", message: getApiError(error) })
     } finally {
@@ -384,7 +493,7 @@ const AdminInventory = () => {
       setAlert({ type: "", message: "" })
       await api.patch(`/admin/bookings/${container.id}/store`)
       setAlert({ type: "success", message: "Container marked as stored. Billing was computed and it is now visible in Storage Monitoring." })
-      await loadAll()
+      await refreshInventory()
     } catch (error) {
       setAlert({ type: "error", message: getApiError(error) })
     }
@@ -400,7 +509,7 @@ const AdminInventory = () => {
       const { data } = await api.delete(`/admin/bookings/${container.id}`)
       if (selectedContainer?.id === container.id) setSelectedContainer(null)
       setAlert({ type: "success", message: data.message || "Container booking deleted successfully." })
-      await loadAll()
+      await refreshInventory({ refreshYard: true })
     } catch (error) {
       setAlert({ type: "error", message: getApiError(error) })
     } finally {
@@ -419,16 +528,16 @@ const AdminInventory = () => {
               Containers appear here immediately after Gate-In approval. The most recently accepted Gate-In record is shown first.
             </p>
           </div>
-          <button type="button" onClick={loadAll} className="btn-secondary shrink-0" disabled={loading}>
-            <RefreshCw size={16} /> Refresh
+          <button type="button" onClick={loadAll} className="btn-secondary shrink-0" disabled={loading || tableLoading}>
+            <RefreshCw size={16} className={loading || tableLoading ? "animate-spin" : ""} /> Refresh
           </button>
         </div>
 
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Area Capacity" value={`${summary?.totalAreaCapacityTeu || 0} TEU`} icon={Warehouse} />
-          <StatCard label="Inventory Containers" value={bookingContainers.length} icon={MapPin} />
-          <StatCard label="Waiting Storage" value={waitingForStorage.length} icon={PackageCheck} />
-          <StatCard label="Inventory TEU" value={Math.round(assignedTeu * 100) / 100} icon={CalendarClock} />
+          <StatCard label="Inventory Containers" value={inventoryStats.totalContainers} icon={MapPin} />
+          <StatCard label="Waiting Storage" value={inventoryStats.waitingStorage} icon={PackageCheck} />
+          <StatCard label="Inventory TEU" value={Math.round(inventoryStats.inventoryTeu * 100) / 100} icon={CalendarClock} />
         </div>
 
         <div className="mt-4">
@@ -505,7 +614,7 @@ const AdminInventory = () => {
         </div>
 
         <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-500">
-          Showing {filteredContainers.length} of {bookingContainers.length} Gate-In accepted containers • newest first
+          Showing {filteredContainers.length} matching containers • {inventoryStats.totalContainers} total in inventory{inventoryTruncated ? " • result limit reached; refine filters to narrow the list" : ""}
         </div>
 
         <div className="overflow-x-auto">
@@ -522,7 +631,8 @@ const AdminInventory = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {filteredContainers.length === 0 && !loading && (
+              {(loading || tableLoading) && filteredContainers.length === 0 && <TableLoadingRow colSpan={7} rows={7} actionColumn label="Loading inventory containers" />}
+              {filteredContainers.length === 0 && !loading && !tableLoading && (
                 <tr>
                   <td colSpan="7" className="px-5 py-10 text-center font-bold text-slate-500">No Gate-In accepted containers found.</td>
                 </tr>

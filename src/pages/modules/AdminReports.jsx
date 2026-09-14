@@ -16,6 +16,7 @@ import Alert from "../../components/Alert"
 import ModalCloseButton from "../../components/ui/ModalCloseButton"
 import TableCrudActions from "../../components/ui/TableCrudActions"
 import { api, getApiError } from "../../lib/api"
+import TableLoadingRow from "../../components/ui/TableLoadingRow"
 
 const emptyCounts = { 20: 0, 40: 0, total: 0 }
 const emptyReport = {
@@ -369,6 +370,7 @@ const AdminReports = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
+                {loading && (report.clientRevenue || []).length === 0 && <TableLoadingRow colSpan={7} rows={6} actionColumn label="Loading revenue report" />}
                 {(report.clientRevenue || []).map((client, index) => (
                   <tr key={client.clientId}>
                     <td className="px-5 py-4 font-black text-slate-500">#{index + 1}</td>
@@ -389,7 +391,7 @@ const AdminReports = () => {
                     </td>
                   </tr>
                 ))}
-                {(report.clientRevenue || []).length === 0 && (
+                {!loading && (report.clientRevenue || []).length === 0 && (
                   <tr>
                     <td colSpan="7" className="px-5 py-10 text-center font-bold text-slate-500">
                       No completed release revenue found for the selected filters.
@@ -425,6 +427,7 @@ const AdminReports = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
+                {loading && (report.releaseReports || []).length === 0 && <TableLoadingRow colSpan={10} rows={6} actionColumn label="Loading release report" />}
                 {(report.releaseReports || []).map((item) => (
                   <tr key={item.id}>
                     <td className="px-5 py-4 font-black text-emerald-700">{item.reportNumber}</td>
@@ -448,7 +451,7 @@ const AdminReports = () => {
                     </td>
                   </tr>
                 ))}
-                {(report.releaseReports || []).length === 0 && (
+                {!loading && (report.releaseReports || []).length === 0 && (
                   <tr>
                     <td colSpan="10" className="px-5 py-10 text-center font-bold text-slate-500">
                       No release completion reports found for the selected filters.

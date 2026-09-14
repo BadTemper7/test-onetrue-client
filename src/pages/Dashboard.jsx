@@ -23,6 +23,7 @@ import { useAdminDashboardStore } from "../stores/adminDashboardStore";
 import Pagination from "../components/ui/Pagination";
 import DashboardCharts from "../components/dashboard/DashboardCharts";
 import { usePagination } from "../hooks/usePagination";
+import TableLoadingRow from "../components/ui/TableLoadingRow"
 
 const periodOptions = [
   { value: "daily", label: "Daily" },
@@ -286,6 +287,7 @@ const Dashboard = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
+                {loading && recentAccounts.length === 0 && <TableLoadingRow colSpan={4} rows={5} label="Loading recent accounts" />}
                 {accountPagination.paginatedItems.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-50">
                     <td className="px-5 py-3 font-semibold text-slate-800">{item.name}</td>

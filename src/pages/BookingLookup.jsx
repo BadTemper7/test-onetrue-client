@@ -48,6 +48,102 @@ const Detail = ({ label, value }) => (
   </div>
 )
 
+const PaymentHistoryBreakdown = ({ booking }) => {
+  const transactions = Array.isArray(booking?.paymentTransactions) ? booking.paymentTransactions : []
+  const gateInPaid = transactions
+    .filter((item) => item.paymentStage === "gate_in")
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0)
+  const gateOutPaid = transactions
+    .filter((item) => item.paymentStage === "gate_out")
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0)
+  const totalPaid = gateInPaid + gateOutPaid
+  const gateInBilling = Number(booking?.gateInBillingTotal || booking?.gateInPaymentTotal || gateInPaid || 0)
+  const gateOutBilling = Number(booking?.gateOutBillingTotal ?? booking?.billingTotal ?? 0)
+  const totalBilling = Number(booking?.totalBillingAmount ?? (gateInBilling + gateOutBilling))
+  const currentBalance = Math.max(0, Number(booking?.paymentBalanceDue ?? booking?.paymentAmount ?? 0))
+
+  const summaryCards = [
+    { label: "Gate-In Billing", value: gateInBilling, classes: "bg-amber-50 text-amber-700" },
+    { label: "Gate-In Payment", value: gateInPaid, classes: "bg-amber-50 text-amber-700" },
+    { label: "Gate-Out Billing", value: gateOutBilling, classes: "bg-blue-50 text-blue-700" },
+    { label: "Gate-Out Payment", value: gateOutPaid, classes: "bg-blue-50 text-blue-700" },
+    { label: "Total Billing", value: totalBilling, classes: "bg-slate-50 text-slate-600" },
+    { label: "Current Balance", value: currentBalance, classes: "bg-emerald-50 text-emerald-700" },
+  ]
+
+  return (
+    <div className="card p-5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-lg font-black text-slate-950">Payment & Billing History</h3>
+          <p className="mt-1 text-sm font-semibold text-slate-500">Gate-In and Gate-Out billing and payments are shown as separate fields.</p>
+        </div>
+        <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-right">
+          <p className="text-xs font-black uppercase text-emerald-700">Total Paid</p>
+          <p className="font-black text-slate-900">PHP {totalPaid.toLocaleString()}</p>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {summaryCards.map((item) => (
+          <div key={item.label} className={`rounded-xl p-3 ${item.classes}`}>
+            <p className="text-xs font-black uppercase">{item.label}</p>
+            <p className="mt-1 font-black text-slate-900">PHP {item.value.toLocaleString()}</p>
+          </div>
+        ))}
+      </div>
+
+      {transactions.length === 0 ? (
+        <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">No approved payment transactions have been recorded yet.</div>
+      ) : (
+        <div className="mt-4 space-y-3">
+          {transactions.map((payment, index) => {
+            const isGateIn = payment.paymentStage === "gate_in"
+            return (
+              <div key={payment.id || index} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+                  <div>
+                    <span className={`rounded-full px-3 py-1 text-xs font-black ${isGateIn ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+                      {isGateIn ? "Gate-In Payment" : "Gate-Out Payment"}
+                    </span>
+                    <p className="mt-2 text-xs font-semibold text-slate-500">
+                      {formatDate(payment.paymentDate)}
+                      {payment.referenceNumber ? ` • Ref ${payment.referenceNumber}` : ""}
+                      {payment.receiptNumber ? ` • Receipt ${payment.receiptNumber}` : ""}
+                    </p>
+                  </div>
+                  <p className="text-lg font-black text-slate-900">PHP {Number(payment.amount || 0).toLocaleString()}</p>
+                </div>
+
+                {Array.isArray(payment.lineItems) && payment.lineItems.length > 0 && (
+                  <div className="mt-3 space-y-1.5 border-t border-slate-200 pt-3">
+                    {payment.lineItems.map((item, itemIndex) => (
+                      <div key={`${item.chargeCode || item.description}-${itemIndex}`} className="flex justify-between gap-3 text-sm">
+                        <span className="font-semibold text-slate-700">
+                          {String(item.chargeCode || "").startsWith("LIFT_ON")
+                            ? "Lift On Charge"
+                            : String(item.chargeCode || "").startsWith("LIFT_OFF")
+                              ? "Lift Off Charge"
+                              : item.description || item.chargeCode}
+                        </span>
+                        <span className="font-black text-slate-900">PHP {Number(item.amount || 0).toLocaleString()}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between border-t border-slate-200 pt-2 text-sm">
+                      <span className="font-black">Transaction Total</span>
+                      <span className="font-black">PHP {Number(payment.grossTotal || payment.amount || 0).toLocaleString()}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const BookingLookupPage = () => {
   const [searchParams, setSearchParams] = useSearchParams()
   const initialNumber = searchParams.get("bookingNumber") || ""
@@ -203,6 +299,8 @@ const BookingLookupPage = () => {
                 </div>
               </div>
             </div>
+
+            <PaymentHistoryBreakdown booking={booking} />
 
             {(booking.rejectionReason || booking.paymentRejectionReason || booking.inspectionRemarks || booking.clientRemarks) && (
               <div className="card p-5">

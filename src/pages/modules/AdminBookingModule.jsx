@@ -30,6 +30,7 @@ import { api, getApiError, resolveFileUrl } from "../../lib/api"
 import { useAuthStore } from "../../stores/authStore"
 import { hasModulePermission } from "../../lib/permissions"
 import { printBookingDocument } from "../../lib/printDocument"
+import TableLoadingRow from "../../components/ui/TableLoadingRow"
 
 const statusLabels = {
   pending_admin_approval: "Pending Admin Approval",
@@ -958,6 +959,7 @@ const AdminBookingModule = ({ mode }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
+              {loading && bookings.length === 0 && <TableLoadingRow colSpan={6} rows={7} actionColumn label="Loading booking records" />}
               {pagination.paginatedItems.map((booking) => (
                 <tr key={booking.id} className="align-top hover:bg-slate-50/70">
                   <td className="px-4 py-4">

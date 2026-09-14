@@ -22,6 +22,7 @@ import Pagination from "../components/ui/Pagination";
 import { api, getApiError, resolveFileUrl } from "../lib/api";
 import { useBookingStore } from "../stores/bookingStore";
 import { usePagination } from "../hooks/usePagination";
+import TableLoadingRow from "../components/ui/TableLoadingRow"
 
 const statusConfig = {
   pending_admin_approval: [
@@ -102,6 +103,34 @@ const formatDateTime = (value) => {
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
 };
 
+const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
+
+const getPaymentPreviewBooking = (booking, isVatApplicable) => {
+  if (!booking) return booking;
+  const subtotal = roundMoney(booking.billingSubtotal || 0);
+  const vatRate = Number(booking.vatRate || 0.12);
+  const vatAmount = isVatApplicable ? roundMoney(subtotal * vatRate) : 0;
+  const billingTotal = roundMoney(subtotal + vatAmount);
+  const isGateInPayment =
+    (booking.billingStage === "gate_in" || booking.status === "approved_area_assigned") &&
+    booking.loloPaymentStage === "gate_in";
+  const gateInPaid = Math.max(Number(booking.gateInPaymentTotal || 0), 0);
+  const gateOutPaid = Math.max(Number(booking.gateOutPaymentTotal || 0), 0);
+  const approvedCredit = isGateInPayment
+    ? Math.max(gateInPaid, Number(booking.approvedPaymentAmount || 0))
+    : gateOutPaid;
+  const paymentBalanceDue = roundMoney(Math.max(billingTotal - approvedCredit, 0));
+
+  return {
+    ...booking,
+    isVatApplicable,
+    vatAmount,
+    billingTotal,
+    paymentBalanceDue,
+    paymentAmount: paymentBalanceDue,
+  };
+};
+
 const BillingBreakdown = ({ booking, className = "" }) => {
   const lineItems = booking?.billingLineItems || [];
   if (lineItems.length === 0) return null;
@@ -154,30 +183,131 @@ const BillingBreakdown = ({ booking, className = "" }) => {
           <span>PHP {Number(booking.vatAmount || 0).toLocaleString()}</span>
         </div>
         <div className="flex items-center justify-between font-black text-slate-900">
-          <span>Gross total</span>
+          <span>{booking.isVatApplicable === false ? "Non-VAT Grand Total" : "Grand Total"}</span>
           <span>
             PHP {Number(booking.billingTotal || 0).toLocaleString()}
           </span>
         </div>
-        {Number(booking.approvedPaymentAmount || 0) > 0 && (
-          <>
-            <div className="flex items-center justify-between font-semibold text-emerald-700">
-              <span>Approved payment credit</span>
-              <span>- PHP {Number(booking.approvedPaymentAmount || 0).toLocaleString()}</span>
-            </div>
-            <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2 font-black text-slate-900">
-              <span>Balance due</span>
-              <span>PHP {Number(booking.paymentBalanceDue ?? booking.paymentAmount ?? 0).toLocaleString()}</span>
-            </div>
-          </>
-        )}
-        {Number(booking.paymentCreditAmount || 0) > 0 && (
+        {booking.billingStage === "gate_in" && Number(booking.approvedPaymentAmount || 0) > 0 && (
           <div className="flex items-center justify-between font-semibold text-emerald-700">
-            <span>Remaining credit</span>
+            <span>Gate-In LOLO payment</span>
+            <span>PHP {Number(booking.approvedPaymentAmount || 0).toLocaleString()}</span>
+          </div>
+        )}
+        <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2 font-black text-slate-900">
+          <span>Balance due</span>
+          <span>PHP {Number(booking.paymentBalanceDue ?? booking.paymentAmount ?? booking.billingTotal ?? 0).toLocaleString()}</span>
+        </div>
+        {booking.billingStage === "gate_in" && Number(booking.paymentCreditAmount || 0) > 0 && (
+          <div className="flex items-center justify-between font-semibold text-emerald-700">
+            <span>Remaining Gate-In credit</span>
             <span>PHP {Number(booking.paymentCreditAmount || 0).toLocaleString()}</span>
           </div>
         )}
+        {booking.billingStage === "gate_out" && Number(booking.approvedPaymentAmount || 0) > 0 && (
+          <p className="text-xs leading-5 text-slate-500">Gate-In LOLO payment is recorded separately and is not deducted from the Gate-Out transaction.</p>
+        )}
       </div>
+    </div>
+  );
+};
+
+const PaymentHistoryBreakdown = ({ booking, className = "" }) => {
+  const transactions = Array.isArray(booking?.paymentTransactions) ? booking.paymentTransactions : [];
+  const totalPaid = transactions.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const gateInPaid = transactions
+    .filter((item) => item.paymentStage === "gate_in")
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const gateOutPaid = transactions
+    .filter((item) => item.paymentStage === "gate_out")
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const gateInBilling = Number(booking?.gateInBillingTotal || booking?.gateInPaymentTotal || gateInPaid || 0);
+  const gateOutBilling = Number(booking?.gateOutBillingTotal ?? booking?.billingTotal ?? 0);
+  const totalBilling = Number(booking?.totalBillingAmount ?? (gateInBilling + gateOutBilling));
+  const gateOutBalance = Number(booking?.paymentBalanceDue ?? booking?.paymentAmount ?? 0);
+
+  const summaryCards = [
+    { label: "Gate-In Billing", value: gateInBilling, classes: "bg-amber-50 text-amber-700" },
+    { label: "Gate-In Payment", value: gateInPaid, classes: "bg-amber-50 text-amber-700" },
+    { label: "Gate-Out Billing", value: gateOutBilling, classes: "bg-blue-50 text-blue-700" },
+    { label: "Gate-Out Payment", value: gateOutPaid, classes: "bg-blue-50 text-blue-700" },
+    { label: "Total Billing", value: totalBilling, classes: "bg-slate-50 text-slate-600" },
+    { label: "Current Balance", value: gateOutBalance, classes: "bg-emerald-50 text-emerald-700" },
+  ];
+
+  return (
+    <div className={`rounded-xl border border-slate-200 bg-white p-4 ${className}`}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-wide text-emerald-700">Billing Information</p>
+          <h3 className="mt-1 text-lg font-black text-slate-950">Complete Payment History</h3>
+          <p className="mt-1 text-xs font-semibold text-slate-500">
+            Gate-In billing/payment and Gate-Out billing/payment are shown as separate fields and transactions.
+          </p>
+        </div>
+        <div className="rounded-xl bg-slate-50 px-3 py-2 text-right">
+          <p className="text-xs font-black uppercase text-slate-400">Total Paid</p>
+          <p className="font-black text-slate-900">PHP {totalPaid.toLocaleString()}</p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {summaryCards.map((card) => (
+          <div key={card.label} className={`rounded-xl p-3 ${card.classes}`}>
+            <p className="text-xs font-black uppercase">{card.label}</p>
+            <p className="mt-1 font-black text-slate-900">PHP {Number(card.value || 0).toLocaleString()}</p>
+          </div>
+        ))}
+      </div>
+
+      {transactions.length === 0 ? (
+        <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">
+          No approved payment transactions have been recorded yet.
+        </div>
+      ) : (
+        <div className="mt-3 space-y-3">
+          {transactions.map((payment, index) => (
+            <div key={payment.id || index} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-black ${payment.paymentStage === "gate_in" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+                    {payment.paymentStage === "gate_in" ? "Gate-In Payment" : "Gate-Out Payment"}
+                  </span>
+                  <p className="mt-2 text-xs font-semibold text-slate-500">
+                    {formatDateTime(payment.paymentDate)}
+                    {payment.referenceNumber ? ` • Ref ${payment.referenceNumber}` : ""}
+                    {payment.receiptNumber ? ` • Receipt ${payment.receiptNumber}` : ""}
+                  </p>
+                </div>
+                <p className="text-lg font-black text-slate-900">PHP {Number(payment.amount || 0).toLocaleString()}</p>
+              </div>
+              {Array.isArray(payment.lineItems) && payment.lineItems.length > 0 && (
+                <div className="mt-3 border-t border-slate-200 pt-3">
+                  <p className="text-xs font-black uppercase tracking-wide text-slate-400">Payment Breakdown</p>
+                  <div className="mt-2 space-y-1.5">
+                    {payment.lineItems.map((item, itemIndex) => (
+                      <div key={`${item.chargeCode || item.description}-${itemIndex}`} className="flex justify-between gap-3 text-sm">
+                        <span className="font-semibold text-slate-700">
+                          {String(item.chargeCode || "").startsWith("LIFT_ON")
+                            ? "Lift On Charge"
+                            : String(item.chargeCode || "").startsWith("LIFT_OFF")
+                              ? "Lift Off Charge"
+                              : item.description || item.chargeCode}
+                        </span>
+                        <span className="font-black text-slate-900">PHP {Number(item.amount || 0).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 flex justify-between border-t border-slate-200 pt-2 text-sm">
+                    <span className="font-black">Transaction Total</span>
+                    <span className="font-black">PHP {Number(payment.grossTotal || payment.amount || 0).toLocaleString()}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -203,7 +333,7 @@ const BookingHistory = () => {
 
   const availablePaymentTypes = paymentTypes;
   const [actionError, setActionError] = useState("");
-  const [gateOut, setGateOut] = useState({ outDate: "", outTime: null, remarks: "" });
+  const [gateOut, setGateOut] = useState({ outDate: "", outTime: null });
   const [reversalReason, setReversalReason] = useState("");
   const [payment, setPayment] = useState({
     paymentTypeId: "",
@@ -212,6 +342,10 @@ const BookingHistory = () => {
     paymentProof: null,
     isVatApplicable: true,
   });
+  const paymentPreviewBooking = useMemo(
+    () => getPaymentPreviewBooking(selectedBooking, payment.isVatApplicable),
+    [selectedBooking, payment.isVatApplicable],
+  );
 
   useEffect(() => {
     fetchBookings().catch(() => {});
@@ -263,7 +397,7 @@ const BookingHistory = () => {
     setSelectedBooking(booking);
     setModal(type);
     setActionError("");
-    setGateOut({ outDate: "", outTime: null, remarks: "" });
+    setGateOut({ outDate: "", outTime: null });
     setReversalReason("");
     setPayment({
       paymentTypeId: availablePaymentTypes[0]?.id || "",
@@ -306,7 +440,6 @@ const BookingHistory = () => {
     try {
       await requestGateOut(selectedBooking.id, {
         outDate: combinedOutDate.toISOString(),
-        remarks: gateOut.remarks,
       });
       closeModal();
     } catch (requestError) {
@@ -371,7 +504,7 @@ const BookingHistory = () => {
   const renderAction = (booking) => {
     if (
       booking.status === "approved_area_assigned" &&
-      booking.loloPaymentStage !== "gate_out" &&
+      booking.loloPaymentStage === "gate_in" &&
       ["unpaid", "payment_rejected", "additional_payment_required"].includes(
         booking.billingStatus,
       ) &&
@@ -506,6 +639,7 @@ const BookingHistory = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
+              {loading && filteredBookings.length === 0 && <TableLoadingRow colSpan={8} rows={6} actionColumn label="Loading booking history" />}
               {bookingPagination.paginatedItems.map((booking) => (
                 <tr key={booking.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3">
@@ -603,7 +737,7 @@ const BookingHistory = () => {
                     ? "Submit Date & Time Out"
                     : modal === "payment"
                       ? (selectedBooking.billingStage === "gate_in" ||
-                        selectedBooking.status === "approved_area_assigned") && selectedBooking.loloPaymentStage !== "gate_out"
+                        selectedBooking.status === "approved_area_assigned") && selectedBooking.loloPaymentStage === "gate_in"
                         ? "Pay Gate-In LOLO"
                         : "Submit Gate-Out Payment"
                       : modal === "reversal"
@@ -672,7 +806,7 @@ const BookingHistory = () => {
                   ["Gate-Out schedule", selectedBooking.isOverstaying ? "Overstaying" : selectedBooking.gateOutScheduleStatus],
                   ["Overstay started", formatDateTime(selectedBooking.gateOutOverstayStartedAt)],
                   ["Billing computed as of", formatDateTime(selectedBooking.billingComputedAt)],
-                  ["Approved payment", Number(selectedBooking.approvedPaymentAmount || 0) > 0 ? `PHP ${Number(selectedBooking.approvedPaymentAmount).toLocaleString()}` : "—"],
+                  ["Gate-In LOLO payment (separate)", Number(selectedBooking.approvedPaymentAmount || 0) > 0 ? `PHP ${Number(selectedBooking.approvedPaymentAmount).toLocaleString()}` : "—"],
                   ["Current balance due", `PHP ${Number(selectedBooking.paymentBalanceDue ?? selectedBooking.paymentAmount ?? 0).toLocaleString()}`],
                   ["Reversal reason", selectedBooking.gateOutReversalRequestReason],
                   ["Reversal decision", selectedBooking.gateOutReversalDecision],
@@ -692,6 +826,7 @@ const BookingHistory = () => {
                   booking={selectedBooking}
                   className="sm:col-span-2"
                 />
+                <PaymentHistoryBreakdown booking={selectedBooking} className="sm:col-span-2" />
               </div>
             )}
 
@@ -726,20 +861,11 @@ const BookingHistory = () => {
                     required
                   />
                 </div>
-                <InputText
-                  label="Remarks"
-                  name="remarks"
-                  value={gateOut.remarks}
-                  onChange={(event) =>
-                    setGateOut((current) => ({
-                      ...current,
-                      remarks: event.target.value,
-                    }))
-                  }
-                  placeholder="Optional gate-out remarks"
-                />
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs font-bold leading-5 text-amber-800">
+                  Pullout / Gate-Out requests should be submitted at least 2 days in advance. Gate-Out booking is limited to 3 containers per hour, so requested time slots are subject to availability.
+                </div>
                 <p className="rounded-lg bg-blue-50 p-3 text-xs text-blue-700">
-                  The final Gate-Out bill will be computed using the selected Date Out and Time Out. Storage and other charges are payable only at Gate-Out{selectedBooking.loloPaymentStage === "gate_out" ? ", and this booking's LOLO charge will be included there as well" : "; your approved Gate-In LOLO payment will be applied as credit"}.
+                  The final Gate-Out bill will be computed using the selected Date Out and Time Out. Storage and other charges are payable only at Gate-Out{selectedBooking.loloPaymentStage === "gate_in" ? "; your Gate-In LOLO payment remains a separate transaction and is not deducted from Gate-Out" : ""}.
                 </p>
               </div>
             )}
@@ -782,7 +908,7 @@ const BookingHistory = () => {
               <div className="mt-5 space-y-4">
                 <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
                   {(selectedBooking.billingStage === "gate_in" ||
-                  selectedBooking.status === "approved_area_assigned") && selectedBooking.loloPaymentStage !== "gate_out" ? (
+                  selectedBooking.status === "approved_area_assigned") && selectedBooking.loloPaymentStage === "gate_in" ? (
                     <>
                       <p className="font-bold">Gate-In payment</p>
                       <p className="mt-1 text-xs leading-5">
@@ -795,8 +921,8 @@ const BookingHistory = () => {
                       <p className="font-bold">Gate-Out payment</p>
                       <p className="mt-1 text-xs leading-5">
                         {selectedBooking.loloPaymentStage === "gate_out"
-                          ? "This Gate-Out payment includes LOLO together with storage and other Gate-Out charges."
-                          : "This is the remaining Gate-Out balance after your approved Gate-In LOLO payment credit is applied."}
+                          ? "This is the Gate-Out payment for the applicable remaining charges."
+                          : "This is the Gate-Out charges are billed separately from the Gate-In LOLO transaction."}
                       </p>
                     </>
                   )}
@@ -805,7 +931,7 @@ const BookingHistory = () => {
                   <p className="text-sm text-emerald-700">Amount to pay</p>
                   <p className="mt-1 text-2xl font-bold text-emerald-700">
                     PHP{" "}
-                    {Number(selectedBooking.paymentBalanceDue ?? selectedBooking.paymentAmount ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}
+                    {Number(paymentPreviewBooking?.paymentBalanceDue ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}
                   </p>
                 </div>
                 <div className="rounded-xl border border-slate-200 p-4">
@@ -851,20 +977,7 @@ const BookingHistory = () => {
                     transactions receive an Acknowledgement Receipt.
                   </p>
                 </div>
-                <BillingBreakdown
-                  booking={{
-                    ...selectedBooking,
-                    isVatApplicable: payment.isVatApplicable,
-                    vatAmount: payment.isVatApplicable
-                      ? Number(selectedBooking.billingSubtotal || 0) *
-                        Number(selectedBooking.vatRate || 0.12)
-                      : 0,
-                    billingTotal: payment.isVatApplicable
-                      ? Number(selectedBooking.billingSubtotal || 0) *
-                        (1 + Number(selectedBooking.vatRate || 0.12))
-                      : Number(selectedBooking.billingSubtotal || 0),
-                  }}
-                />
+                <BillingBreakdown booking={paymentPreviewBooking} />
                 <label className="block">
                   <span className="mb-1.5 block text-sm font-medium text-slate-700">
                     Bank Account <span className="text-red-500">*</span>
