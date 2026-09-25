@@ -37,6 +37,16 @@ const rateTypeOptions = [
 
 const formatMoney = (value) => `PHP ${Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
+const formatEffectiveDate = (value) => {
+  if (!value) return ""
+  return new Intl.DateTimeFormat("en-PH", {
+    timeZone: "Asia/Manila",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(value))
+}
+
 const getChargeType = (rate) => {
   if (["lift_on", "lift_off", "storage", "total_handling", "congestion"].includes(rate?.chargeType)) return rate.chargeType
   const text = `${rate?.chargeCode || ""} ${rate?.description || ""}`.toLowerCase()
@@ -196,7 +206,7 @@ const Rates = () => {
           <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6">
             <h2 className="font-black text-emerald-900">How the final bill is computed</h2>
             <p className="mt-2 text-sm font-semibold leading-6 text-emerald-800">
-              Final billing uses the booking classification and automatically selects the matching Local/International, Empty/Loaded, and 20ft/40ft rates for Lift On, Lift Off, Storage, and admin-added charges.
+              Final billing uses the booking classification and automatically selects the matching Local/International, Empty/Loaded, and 20ft/40ft rates. Rate changes are effective-dated: charges before the effectivity date keep the previous rate, while charges or daily service periods from the effectivity date onward use the new rate. Ongoing storage is automatically split across the applicable rate periods.
             </p>
           </section>
         </>
@@ -283,6 +293,11 @@ const RateCard = ({ rate }) => (
 
     <p className="mt-4 text-2xl font-black text-slate-950">{formatMoney(rate.rateAmount)}</p>
     <p className="mt-1 text-sm font-semibold text-slate-500">{rate.unitLabel || unitLabels[rate.unit] || rate.unit}</p>
+    {rate.effectiveDate && (
+      <p className="mt-2 inline-flex rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">
+        Effective from {formatEffectiveDate(rate.effectiveDate)}
+      </p>
+    )}
     {rate.freeDays > 0 && (
       <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
         Includes {rate.freeDays} free day{rate.freeDays === 1 ? "" : "s"}
