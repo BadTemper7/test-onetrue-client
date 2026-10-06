@@ -113,7 +113,7 @@ const getPaymentPreviewBooking = (booking, isVatApplicable) => {
   const billingTotal = roundMoney(subtotal + vatAmount);
   const isGateInPayment =
     (booking.billingStage === "gate_in" || booking.status === "approved_area_assigned") &&
-    booking.loloPaymentStage === "gate_in";
+    (booking.isCMASpecialClient || booking.loloPaymentStage === "gate_in");
   const gateInPaid = Math.max(Number(booking.gateInPaymentTotal || 0), 0);
   const gateOutPaid = Math.max(Number(booking.gateOutPaymentTotal || 0), 0);
   const approvedCredit = isGateInPayment
@@ -190,7 +190,7 @@ const BillingBreakdown = ({ booking, className = "" }) => {
         </div>
         {booking.billingStage === "gate_in" && Number(booking.approvedPaymentAmount || 0) > 0 && (
           <div className="flex items-center justify-between font-semibold text-emerald-700">
-            <span>Gate-In LOLO payment</span>
+            <span>{booking.isCMASpecialClient ? "Gate-In Documentation Fee payment" : "Gate-In LOLO payment"}</span>
             <span>PHP {Number(booking.approvedPaymentAmount || 0).toLocaleString()}</span>
           </div>
         )}
@@ -205,7 +205,7 @@ const BillingBreakdown = ({ booking, className = "" }) => {
           </div>
         )}
         {booking.billingStage === "gate_out" && Number(booking.approvedPaymentAmount || 0) > 0 && (
-          <p className="text-xs leading-5 text-slate-500">Gate-In LOLO payment is recorded separately and is not deducted from the Gate-Out transaction.</p>
+          <p className="text-xs leading-5 text-slate-500">{booking.isCMASpecialClient ? "Gate-In Documentation Fee payment is recorded separately. CMA LOLO/storage charges are not part of your trucker billing." : "Gate-In LOLO payment is recorded separately and is not deducted from the Gate-Out transaction."}</p>
         )}
       </div>
     </div>
@@ -504,7 +504,7 @@ const BookingHistory = () => {
   const renderAction = (booking) => {
     if (
       booking.status === "approved_area_assigned" &&
-      booking.loloPaymentStage === "gate_in" &&
+      (booking.isCMASpecialClient || booking.loloPaymentStage === "gate_in") &&
       ["unpaid", "payment_rejected", "additional_payment_required"].includes(
         booking.billingStatus,
       ) &&
@@ -517,7 +517,7 @@ const BookingHistory = () => {
           onClick={() => openModal("payment", booking)}
           className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
         >
-          Pay Gate-In LOLO
+          {booking.isCMASpecialClient ? "Pay Documentation Fee" : "Pay Gate-In LOLO"}
         </button>
       );
     }
@@ -649,7 +649,10 @@ const BookingHistory = () => {
                     <p className="text-xs text-slate-400">
                       {booking.shippingLine}
                     </p>
-                    {booking.recordSource === "legacy_migration" && <span className="mt-2 inline-flex rounded-full bg-violet-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-violet-700">Legacy Record</span>}
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {booking.isCMASpecialClient && <span className="inline-flex rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-700">CMA Special Client</span>}
+                      {booking.recordSource === "legacy_migration" && <span className="inline-flex rounded-full bg-violet-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-violet-700">Legacy Record</span>}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <p className="font-medium text-slate-700">
@@ -678,7 +681,7 @@ const BookingHistory = () => {
                     <StatusBadge booking={booking} />
                   </td>
                   <td className="px-4 py-3">
-                    {booking.status === "approved_area_assigned" && booking.loloPaymentStage === "gate_out" ? (
+                    {booking.status === "approved_area_assigned" && booking.loloPaymentStage === "gate_out" && !booking.isCMASpecialClient ? (
                       <>
                         <p className="font-semibold text-blue-700">Deferred to Gate-Out</p>
                         <p className="text-xs text-slate-500">No Gate-In payment required</p>
@@ -737,8 +740,8 @@ const BookingHistory = () => {
                     ? "Submit Date & Time Out"
                     : modal === "payment"
                       ? (selectedBooking.billingStage === "gate_in" ||
-                        selectedBooking.status === "approved_area_assigned") && selectedBooking.loloPaymentStage === "gate_in"
-                        ? "Pay Gate-In LOLO"
+                        selectedBooking.status === "approved_area_assigned") && (selectedBooking.isCMASpecialClient || selectedBooking.loloPaymentStage === "gate_in")
+                        ? (selectedBooking.isCMASpecialClient ? "Pay Documentation Fee" : "Pay Gate-In LOLO")
                         : "Submit Gate-Out Payment"
                       : modal === "reversal"
                         ? "Request Gate-Out Reversal"
@@ -774,18 +777,18 @@ const BookingHistory = () => {
                   ],
                   [
                     "Billing",
-                    selectedBooking.status === "approved_area_assigned" && selectedBooking.loloPaymentStage === "gate_out"
+                    selectedBooking.status === "approved_area_assigned" && selectedBooking.loloPaymentStage === "gate_out" && !selectedBooking.isCMASpecialClient
                       ? "Deferred to Gate-Out"
                       : billingLabels[selectedBooking.billingStatus] || selectedBooking.billingStatus,
                   ],
                   [
-                    "LOLO collection",
-                    selectedBooking.loloPaymentStage === "gate_out" ? "Gate-Out" : "Gate-In",
+                    selectedBooking.isCMASpecialClient ? "CMA billing relationship" : "LOLO collection",
+                    selectedBooking.isCMASpecialClient ? `${selectedBooking.cmaClientName || "CMA"} (LOLO / storage billed separately)` : (selectedBooking.loloPaymentStage === "gate_out" ? "Gate-Out" : "Gate-In"),
                   ],
                   [
                     "Billing stage",
                     selectedBooking.billingStage === "gate_in"
-                      ? selectedBooking.loloPaymentStage === "gate_out" ? "Gate-In (no payment due)" : "Gate-In LOLO"
+                      ? selectedBooking.isCMASpecialClient ? "Gate-In Documentation Fee" : selectedBooking.loloPaymentStage === "gate_out" ? "Gate-In (no payment due)" : "Gate-In LOLO"
                       : selectedBooking.billingStage === "gate_out"
                         ? "Gate-Out"
                         : "—",
@@ -794,6 +797,7 @@ const BookingHistory = () => {
                   ["Legacy registration", selectedBooking.legacyRegistrationNumber],
                   ["Historical date quality", selectedBooking.historicalGateInDateType],
                   ["Shipping line", selectedBooking.shippingLine],
+                  ...(selectedBooking.isCMASpecialClient ? [["CMA Special Client", `${selectedBooking.cmaClientName || "CMA"}${selectedBooking.cmaClientCode ? ` (${selectedBooking.cmaClientCode})` : ""}`], ["CMA identification", String(selectedBooking.cmaIdentificationSource || "").replaceAll("_", " ")]] : []),
                   ["Driver", selectedBooking.driverName],
                   ["Truck plate", selectedBooking.truckPlateNumber],
                   [
@@ -806,7 +810,7 @@ const BookingHistory = () => {
                   ["Gate-Out schedule", selectedBooking.isOverstaying ? "Overstaying" : selectedBooking.gateOutScheduleStatus],
                   ["Overstay started", formatDateTime(selectedBooking.gateOutOverstayStartedAt)],
                   ["Billing computed as of", formatDateTime(selectedBooking.billingComputedAt)],
-                  ["Gate-In LOLO payment (separate)", Number(selectedBooking.approvedPaymentAmount || 0) > 0 ? `PHP ${Number(selectedBooking.approvedPaymentAmount).toLocaleString()}` : "—"],
+                  [selectedBooking.isCMASpecialClient ? "Gate-In Documentation Fee payment" : "Gate-In LOLO payment (separate)", Number(selectedBooking.approvedPaymentAmount || 0) > 0 ? `PHP ${Number(selectedBooking.approvedPaymentAmount).toLocaleString()}` : "—"],
                   ["Current balance due", `PHP ${Number(selectedBooking.paymentBalanceDue ?? selectedBooking.paymentAmount ?? 0).toLocaleString()}`],
                   ["Reversal reason", selectedBooking.gateOutReversalRequestReason],
                   ["Reversal decision", selectedBooking.gateOutReversalDecision],
@@ -865,7 +869,9 @@ const BookingHistory = () => {
                   Pullout / Gate-Out requests should be submitted at least 2 days in advance. Gate-Out booking is limited to 3 containers per hour, so requested time slots are subject to availability.
                 </div>
                 <p className="rounded-lg bg-blue-50 p-3 text-xs text-blue-700">
-                  The final Gate-Out bill will be computed using the selected Date Out and Time Out. Storage and other charges are payable only at Gate-Out{selectedBooking.loloPaymentStage === "gate_in" ? "; your Gate-In LOLO payment remains a separate transaction and is not deducted from Gate-Out" : ""}.
+                  {selectedBooking.isCMASpecialClient
+                    ? "Your Gate-Out client payment contains Documentation Fee only. CMA LOLO, storage, and other yard charges are handled separately under CMA Billing and will not appear as your payable charges."
+                    : <>The final Gate-Out bill will be computed using the selected Date Out and Time Out. Storage and other charges are payable only at Gate-Out{selectedBooking.loloPaymentStage === "gate_in" ? "; your Gate-In LOLO payment remains a separate transaction and is not deducted from Gate-Out" : ""}.</>}
                 </p>
               </div>
             )}
@@ -908,21 +914,22 @@ const BookingHistory = () => {
               <div className="mt-5 space-y-4">
                 <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
                   {(selectedBooking.billingStage === "gate_in" ||
-                  selectedBooking.status === "approved_area_assigned") && selectedBooking.loloPaymentStage === "gate_in" ? (
+                  selectedBooking.status === "approved_area_assigned") && (selectedBooking.isCMASpecialClient || selectedBooking.loloPaymentStage === "gate_in") ? (
                     <>
-                      <p className="font-bold">Gate-In payment</p>
+                      <p className="font-bold">{selectedBooking.isCMASpecialClient ? "Gate-In Documentation Fee" : "Gate-In payment"}</p>
                       <p className="mt-1 text-xs leading-5">
-                        This payment covers only Lift On / Lift Off. Storage and
-                        other charges will be billed at Gate-Out.
+                        {selectedBooking.isCMASpecialClient ? "This trucker payment covers Documentation Fee only. CMA LOLO, storage, and other yard charges are billed separately to CMA." : "This payment covers only Lift On / Lift Off. Storage and other charges will be billed at Gate-Out."}
                       </p>
                     </>
                   ) : (
                     <>
-                      <p className="font-bold">Gate-Out payment</p>
+                      <p className="font-bold">{selectedBooking.isCMASpecialClient ? "Gate-Out Documentation Fee" : "Gate-Out payment"}</p>
                       <p className="mt-1 text-xs leading-5">
-                        {selectedBooking.loloPaymentStage === "gate_out"
-                          ? "This is the Gate-Out payment for the applicable remaining charges."
-                          : "This is the Gate-Out charges are billed separately from the Gate-In LOLO transaction."}
+                        {selectedBooking.isCMASpecialClient
+                          ? "Only the applicable Documentation Fee is payable by your trucker account. CMA yard charges are kept separate."
+                          : selectedBooking.loloPaymentStage === "gate_out"
+                            ? "This is the Gate-Out payment for the applicable remaining charges."
+                            : "Gate-Out charges are billed separately from the Gate-In LOLO transaction."}
                       </p>
                     </>
                   )}
