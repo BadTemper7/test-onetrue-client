@@ -14,7 +14,6 @@ import ModalCloseButton from "../../components/ui/ModalCloseButton"
 import Pagination from "../../components/ui/Pagination"
 import TableCrudActions from "../../components/ui/TableCrudActions"
 import { useClickOutside } from "../../hooks/useClickOutside"
-import { usePagination } from "../../hooks/usePagination"
 import { api, getApiError } from "../../lib/api"
 import { useAuthStore } from "../../stores/authStore"
 import { hasModulePermission } from "../../lib/permissions"
@@ -61,6 +60,9 @@ const AdminBookings = () => {
   const [filters, setFilters] = useState({ status: "all", billingStatus: "all", search: "" })
   const [showFilters, setShowFilters] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [paginationMeta, setPaginationMeta] = useState({ total: 0, totalPages: 1 })
   const [deletingId, setDeletingId] = useState("")
   const [selectedBooking, setSelectedBooking] = useState(null)
   const [alert, setAlert] = useState({ type: "", message: "" })
@@ -79,13 +81,13 @@ const AdminBookings = () => {
       if (filters.status) params.set("status", filters.status)
       if (filters.billingStatus) params.set("billingStatus", filters.billingStatus)
       if (filters.search.trim()) params.set("search", filters.search.trim())
+      params.set("page", String(page))
+      params.set("limit", String(pageSize))
 
-      const [{ data }, summaryResponse] = await Promise.all([
-        api.get(`/admin/bookings?${params.toString()}`),
-        api.get("/admin/bookings/summary").catch(() => ({ data: { summary: {} } })),
-      ])
+      const { data } = await api.get(`/admin/bookings/module-data?${params.toString()}`)
       setBookings(data.bookings || [])
-      setSummary(summaryResponse.data.summary || {})
+      setPaginationMeta({ total: Number(data.pagination?.total) || 0, totalPages: Math.max(Number(data.pagination?.totalPages) || 1, 1) })
+      setSummary(data.summary || {})
     } catch (error) {
       setAlert({ type: "error", message: getApiError(error) })
     } finally {
@@ -93,10 +95,12 @@ const AdminBookings = () => {
     }
   }
 
+  useEffect(() => { setPage(1) }, [filters.status, filters.billingStatus])
+
   useEffect(() => {
     loadBookings()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.status, filters.billingStatus])
+  }, [filters.status, filters.billingStatus, page, pageSize])
 
   const deleteBooking = async (booking) => {
     if (!canDeleteBooking) return
@@ -139,7 +143,18 @@ const AdminBookings = () => {
     completed: summary.completed ?? bookings.filter((item) => item.status === "completed_gate_out_done").length,
   }), [bookings, summary])
 
-  const pagination = usePagination(bookings, 10, `${filters.status}|${filters.billingStatus}|${filters.search}`)
+  const pagination = {
+    page,
+    setPage,
+    pageSize,
+    setPageSize: (value) => { setPageSize(Number(value) || 10); setPage(1) },
+    totalItems: paginationMeta.total,
+    totalPages: paginationMeta.totalPages,
+    startItem: paginationMeta.total === 0 ? 0 : (page - 1) * pageSize + 1,
+    endItem: Math.min(page * pageSize, paginationMeta.total),
+    pageSizeOptions: [10, 25, 50, 100],
+    paginatedItems: bookings,
+  }
 
   return (
     <div className="space-y-6">
@@ -193,7 +208,7 @@ const AdminBookings = () => {
                 placeholder="Search booking, container, client..."
                 value={filters.search}
                 onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
-                onKeyDown={(event) => event.key === "Enter" && loadBookings()}
+                onKeyDown={(event) => { if (event.key === "Enter") { if (page !== 1) setPage(1); else loadBookings() } }}
               />
             </div>
 

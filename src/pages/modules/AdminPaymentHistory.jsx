@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { CreditCard, Printer, RefreshCw, Search } from "lucide-react"
 import Alert from "../../components/Alert"
 import ModalCloseButton from "../../components/ui/ModalCloseButton"
 import Pagination from "../../components/ui/Pagination"
 import TableActionButton from "../../components/ui/TableActionButton"
 import TableCrudActions from "../../components/ui/TableCrudActions"
-import { usePagination } from "../../hooks/usePagination"
 import { api, getApiError } from "../../lib/api"
 import { printBookingDocument } from "../../lib/printDocument"
 import TableLoadingRow from "../../components/ui/TableLoadingRow"
@@ -16,6 +15,9 @@ const formatDate = (value) => value ? new Date(value).toLocaleString("en-PH") : 
 const AdminPaymentHistory = ({ mode = "history" }) => {
   const [transactions, setTransactions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [paginationMeta, setPaginationMeta] = useState({ total: 0, totalPages: 1 })
   const [search, setSearch] = useState("")
   const [paymentType, setPaymentType] = useState("all")
   const [selectedTransaction, setSelectedTransaction] = useState(null)
@@ -25,8 +27,12 @@ const AdminPaymentHistory = ({ mode = "history" }) => {
     try {
       setLoading(true)
       setError("")
-      const { data } = await api.get("/admin/payments/history")
+      const params = new URLSearchParams({ page: String(page), limit: String(pageSize) })
+      if (search.trim()) params.set("search", search.trim())
+      if (paymentType !== "all") params.set("paymentType", paymentType)
+      const { data } = await api.get(`/admin/payments/history?${params.toString()}`)
       setTransactions(data.transactions || [])
+      setPaginationMeta({ total: Number(data.pagination?.total) || 0, totalPages: Math.max(Number(data.pagination?.totalPages) || 1, 1) })
     } catch (err) {
       setError(getApiError(err))
     } finally {
@@ -34,22 +40,32 @@ const AdminPaymentHistory = ({ mode = "history" }) => {
     }
   }
 
-  useEffect(() => { loadTransactions() }, [])
+  const filterKey = `${search.trim()}|${paymentType}`
+  useEffect(() => { setPage(1) }, [filterKey])
+  useEffect(() => {
+    const timer = window.setTimeout(() => loadTransactions(), search.trim() ? 350 : 0)
+    return () => window.clearTimeout(timer)
+  }, [page, pageSize, filterKey])
   useEffect(() => {
     const refresh = () => loadTransactions()
     window.addEventListener("otli:realtime", refresh)
     return () => window.removeEventListener("otli:realtime", refresh)
-  }, [])
+  }, [page, pageSize, filterKey])
 
-  const filtered = useMemo(() => transactions.filter((item) => {
-    const term = search.trim().toLowerCase()
-    const matchesSearch = !term || [item.bookingReference, item.containerNumber, item.clientName, item.paymentReferenceNumber, item.receiptNumber]
-      .some((value) => String(value || "").toLowerCase().includes(term))
-    const matchesType = paymentType === "all" || String(item.paymentTypeCategory || item.paymentType || "").toLowerCase().includes(paymentType)
-    return matchesSearch && matchesType
-  }), [transactions, search, paymentType])
+  const filtered = transactions
 
-  const pagination = usePagination(filtered, 12, `${search}|${paymentType}`)
+  const pagination = {
+    page,
+    setPage,
+    pageSize,
+    setPageSize: (value) => { setPageSize(Number(value) || 10); setPage(1) },
+    totalItems: paginationMeta.total,
+    totalPages: paginationMeta.totalPages,
+    startItem: paginationMeta.total === 0 ? 0 : (page - 1) * pageSize + 1,
+    endItem: Math.min(page * pageSize, paginationMeta.total),
+    pageSizeOptions: [10, 25, 50, 100],
+    paginatedItems: transactions,
+  }
   const title = mode === "invoices" ? "Invoices and Receipts" : "Payment History"
   const description = mode === "invoices"
     ? "Print VAT invoices, official receipts, and Non-VAT acknowledgement receipts."

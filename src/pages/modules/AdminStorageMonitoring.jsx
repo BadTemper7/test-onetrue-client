@@ -5,7 +5,6 @@ import ModalCloseButton from "../../components/ui/ModalCloseButton"
 import { api, getApiError } from "../../lib/api"
 import Pagination from "../../components/ui/Pagination"
 import TableCrudActions from "../../components/ui/TableCrudActions"
-import { usePagination } from "../../hooks/usePagination"
 import { useClickOutside } from "../../hooks/useClickOutside"
 import TableLoadingRow from "../../components/ui/TableLoadingRow"
 
@@ -682,6 +681,10 @@ const AdminStorageMonitoring = () => {
   const [showFilters, setShowFilters] = useState(false)
   const filterRef = useRef(null)
   const [loading, setLoading] = useState(true)
+  const [tableLoading, setTableLoading] = useState(true)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [paginationMeta, setPaginationMeta] = useState({ total: 0, totalPages: 1 })
   const storageRequestRef = useRef(0)
   const storageAbortRef = useRef(null)
   const storageInFlightRef = useRef({ key: "", promise: null })
@@ -694,17 +697,8 @@ const AdminStorageMonitoring = () => {
 
   const selectedArea = useMemo(() => areas.find((area) => area.id === selectedAreaId) || null, [areas, selectedAreaId])
 
-  const storedContainers = useMemo(() => {
-    const term = search.trim().toLowerCase()
-    return containers.filter((container) => {
-      const storedByBooking = storedBookingStatuses.includes(container.bookingStatus)
-      const storedByInventory = storedInventoryStatuses.includes(container.status)
-      const matchesSearch = !term || [container.containerNumber, container.bookingReference, container.clientName, container.areaName, container.blockCode, container.blockName]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(term))
-      return (storedByBooking || storedByInventory) && matchesSearch
-    })
-  }, [containers, search])
+  const storedContainers = containers
+
 
   const selectedAreaContainers = useMemo(() => {
     return selectedAreaId ? storedContainers.filter((container) => container.area === selectedAreaId) : storedContainers
@@ -719,30 +713,32 @@ const AdminStorageMonitoring = () => {
   storageFilterRef.current = { selectedAreaId, selectedBlockId, search: search.trim() }
   const lastRequestedStorageFilterKeyRef = useRef(storageFilterKey)
 
-  const storagePagination = usePagination(
-    selectedBlockContainers,
-    10,
-    storageFilterKey,
-  )
+  const storagePagination = {
+    page,
+    setPage,
+    pageSize,
+    setPageSize: (value) => { setPageSize(Number(value) || 10); setPage(1) },
+    totalItems: paginationMeta.total,
+    totalPages: paginationMeta.totalPages,
+    startItem: paginationMeta.total === 0 ? 0 : (page - 1) * pageSize + 1,
+    endItem: Math.min(page * pageSize, paginationMeta.total),
+    pageSizeOptions: [10, 25, 50, 100],
+    paginatedItems: selectedBlockContainers,
+  }
 
   const usedCapacity = useMemo(() => {
     if (selectedArea) {
-      const unit = getCapacityUnit(selectedArea.containerSize)
-      const value = selectedAreaContainers.reduce(
-        (sum, container) => sum + getYardCapacityUsage(container.containerSize, selectedArea.containerSize),
-        0,
-      )
-
-      return { label: `Used ${unit}`, value }
+      return {
+        label: `Used ${getCapacityUnit(selectedArea.containerSize)}`,
+        value: Number(selectedArea.occupiedSlots) || 0,
+      }
     }
 
-    const value = selectedAreaContainers.reduce(
-      (sum, container) => sum + getYardCapacityUsage(container.containerSize, 20),
-      0,
-    )
-
-    return { label: "Used TEU Equivalent", value }
-  }, [selectedArea, selectedAreaContainers])
+    return {
+      label: "Used TEU Equivalent",
+      value: areas.reduce((sum, area) => sum + (Number(area.occupiedSlots) || 0), 0),
+    }
+  }, [areas, selectedArea])
 
   const loadAreas = async () => {
     const { data } = await api.get("/admin/inventory/areas")
@@ -758,9 +754,9 @@ const AdminStorageMonitoring = () => {
     setBlocks(data.blocks || [])
   }
 
-  const loadContainers = async () => {
+  const loadContainers = async ({ includeMeta = false } = {}) => {
     const filters = storageFilterRef.current || {}
-    const params = new URLSearchParams({ view: "storage", limit: "180", includeStats: "false" })
+    const params = new URLSearchParams({ view: "storage", page: String(page), limit: String(pageSize), includeStats: "false", includeMeta: includeMeta ? "true" : "false" })
     if (filters.selectedAreaId) params.set("areaId", filters.selectedAreaId)
     if (filters.selectedBlockId) params.set("blockId", filters.selectedBlockId)
     if (filters.search) params.set("search", filters.search)
@@ -774,11 +770,15 @@ const AdminStorageMonitoring = () => {
     storageAbortRef.current = controller
     const requestId = ++storageRequestRef.current
 
+    setTableLoading(true)
     let requestPromise
-    requestPromise = api.get(`/admin/inventory/containers?${requestKey}`, { signal: controller.signal })
+    requestPromise = api.get(`/admin/inventory/module-data?${requestKey}`, { signal: controller.signal })
       .then(({ data }) => {
         if (requestId !== storageRequestRef.current) return
         setContainers(data.containers || [])
+        setPaginationMeta({ total: Number(data.pagination?.total) || 0, totalPages: Math.max(Number(data.pagination?.totalPages) || 1, 1) })
+        if (includeMeta) setAreas(data.areas || [])
+        if (data.blocks) setBlocks(data.blocks || [])
       })
       .catch((error) => {
         if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError" || controller.signal.aborted) return
@@ -787,6 +787,7 @@ const AdminStorageMonitoring = () => {
       .finally(() => {
         if (storageInFlightRef.current.promise === requestPromise) storageInFlightRef.current = { key: "", promise: null }
         if (storageAbortRef.current === controller) storageAbortRef.current = null
+        if (requestId === storageRequestRef.current) setTableLoading(false)
       })
 
     storageInFlightRef.current = { key: requestKey, promise: requestPromise }
@@ -797,9 +798,7 @@ const AdminStorageMonitoring = () => {
     try {
       setLoading(true)
       setAlert({ type: "", message: "" })
-      await Promise.all([loadAreas(), loadContainers()])
-      const areaId = storageFilterRef.current?.selectedAreaId
-      if (areaId) await loadBlocks(areaId)
+      await loadContainers({ includeMeta: true })
     } catch (error) {
       if (error?.code !== "ERR_CANCELED" && error?.name !== "CanceledError") {
         setAlert({ type: "error", message: getApiError(error) })
@@ -822,24 +821,22 @@ const AdminStorageMonitoring = () => {
       return
     }
     setSelectedBlockId("")
-    loadBlocks(selectedAreaId).catch((error) => setAlert({ type: "error", message: getApiError(error) }))
   }, [selectedAreaId])
 
+  useEffect(() => { setPage(1) }, [storageFilterKey])
+
   useEffect(() => {
-    if (lastRequestedStorageFilterKeyRef.current === storageFilterKey) return undefined
+    if (!initialLoadStartedRef.current) return undefined
+    const requestKey = `${storageFilterKey}|${page}|${pageSize}`
+    if (lastRequestedStorageFilterKeyRef.current === requestKey) return undefined
     const timer = window.setTimeout(() => {
-      lastRequestedStorageFilterKeyRef.current = storageFilterKey
-      setLoading(true)
-      loadContainers()
-        .catch((error) => {
-          if (error?.code !== "ERR_CANCELED" && error?.name !== "CanceledError") {
-            setAlert({ type: "error", message: getApiError(error) })
-          }
-        })
-        .finally(() => setLoading(false))
-    }, 350)
+      lastRequestedStorageFilterKeyRef.current = requestKey
+      loadContainers().catch((error) => {
+        if (error?.code !== "ERR_CANCELED" && error?.name !== "CanceledError") setAlert({ type: "error", message: getApiError(error) })
+      })
+    }, search.trim() ? 350 : 0)
     return () => window.clearTimeout(timer)
-  }, [storageFilterKey])
+  }, [storageFilterKey, page, pageSize])
 
   useEffect(() => {
     const handleRealtime = (event) => {

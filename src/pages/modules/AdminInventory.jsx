@@ -7,7 +7,6 @@ import Pagination from "../../components/ui/Pagination"
 import TableActionButton from "../../components/ui/TableActionButton"
 import TableLoadingRow from "../../components/ui/TableLoadingRow"
 import TableCrudActions from "../../components/ui/TableCrudActions"
-import { usePagination } from "../../hooks/usePagination"
 import { useClickOutside } from "../../hooks/useClickOutside"
 import { useAuthStore } from "../../stores/authStore"
 import { hasModulePermission } from "../../lib/permissions"
@@ -195,6 +194,9 @@ const AdminInventory = () => {
   const filterRef = useRef(null)
   const [loading, setLoading] = useState(true)
   const [tableLoading, setTableLoading] = useState(true)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [paginationMeta, setPaginationMeta] = useState({ total: 0, totalPages: 1 })
   const [alert, setAlert] = useState({ type: "", message: "" })
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -223,28 +225,26 @@ const AdminInventory = () => {
 
 
   useClickOutside(filterRef, () => setShowFilters(false), showFilters);
-  const filteredContainers = useMemo(() => {
-    const term = search.trim().toLowerCase()
-    return bookingContainers.filter((container) => {
-      const matchesArea = !selectedAreaId || container.area === selectedAreaId
-      const matchesStatus = selectedStatus === "all" || container.bookingStatus === selectedStatus
-      const matchesSearch = !term || [container.containerNumber, container.bookingReference, container.clientName, container.areaName, container.blockCode, container.blockName]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(term))
-      return matchesArea && matchesStatus && matchesSearch
-    })
-  }, [bookingContainers, selectedAreaId, selectedStatus, search])
+  const filteredContainers = bookingContainers
+
 
   const inventoryFilterKey = `${selectedAreaId}|${selectedStatus}|${search.trim()}`
   const inventoryFilterRef = useRef(null)
   inventoryFilterRef.current = { selectedAreaId, selectedStatus, search: search.trim() }
   const lastRequestedFilterKeyRef = useRef(inventoryFilterKey)
 
-  const containerPagination = usePagination(
-    filteredContainers,
-    10,
-    inventoryFilterKey,
-  )
+  const containerPagination = {
+    page,
+    setPage,
+    pageSize,
+    setPageSize: (value) => { setPageSize(Number(value) || 10); setPage(1) },
+    totalItems: paginationMeta.total,
+    totalPages: paginationMeta.totalPages,
+    startItem: paginationMeta.total === 0 ? 0 : (page - 1) * pageSize + 1,
+    endItem: Math.min(page * pageSize, paginationMeta.total),
+    pageSizeOptions: [10, 25, 50, 100],
+    paginatedItems: filteredContainers,
+  }
 
   const loadAreas = async () => {
     const { data } = await api.get("/admin/inventory/areas")
@@ -256,12 +256,14 @@ const AdminInventory = () => {
     setSummary(data.summary || null)
   }
 
-  const loadContainers = async ({ includeStats = false } = {}) => {
+  const loadContainers = async ({ includeStats = false, includeMeta = false } = {}) => {
     const filters = inventoryFilterRef.current || {}
     const params = new URLSearchParams({
       source: "booking",
-      limit: "120",
+      page: String(page),
+      limit: String(pageSize),
       includeStats: includeStats ? "true" : "false",
+      includeMeta: includeMeta ? "true" : "false",
     })
     if (filters.selectedAreaId) params.set("areaId", filters.selectedAreaId)
     if (filters.selectedStatus && filters.selectedStatus !== "all") params.set("status", filters.selectedStatus)
@@ -278,10 +280,15 @@ const AdminInventory = () => {
 
     setTableLoading(true)
     let requestPromise
-    requestPromise = api.get(`/admin/inventory/containers?${requestKey}`, { signal: controller.signal })
+    requestPromise = api.get(`/admin/inventory/module-data?${requestKey}`, { signal: controller.signal })
       .then(({ data }) => {
         if (requestId !== inventoryRequestRef.current) return
         setContainers(data.containers || [])
+        setPaginationMeta({ total: Number(data.pagination?.total) || 0, totalPages: Math.max(Number(data.pagination?.totalPages) || 1, 1) })
+        if (includeMeta) {
+          setAreas(data.areas || [])
+          setSummary(data.summary || null)
+        }
         if (data.stats) {
           setInventoryStats({
             totalContainers: Number(data.stats.totalContainers) || 0,
@@ -310,7 +317,7 @@ const AdminInventory = () => {
     try {
       setLoading(true)
       setAlert({ type: "", message: "" })
-      await Promise.all([loadAreas(), loadSummary(), loadContainers({ includeStats: true })])
+      await loadContainers({ includeStats: true, includeMeta: true })
     } catch (error) {
       if (error?.code !== "ERR_CANCELED" && error?.name !== "CanceledError") {
         setAlert({ type: "error", message: getApiError(error) })
@@ -337,20 +344,20 @@ const AdminInventory = () => {
     loadAll()
   }, [])
 
+  useEffect(() => { setPage(1) }, [inventoryFilterKey])
+
   useEffect(() => {
-    if (lastRequestedFilterKeyRef.current === inventoryFilterKey) return undefined
-
+    if (!initialLoadStartedRef.current) return undefined
+    const requestKey = `${inventoryFilterKey}|${page}|${pageSize}`
+    if (lastRequestedFilterKeyRef.current === requestKey) return undefined
     const timer = window.setTimeout(() => {
-      lastRequestedFilterKeyRef.current = inventoryFilterKey
+      lastRequestedFilterKeyRef.current = requestKey
       loadContainers({ includeStats: false }).catch((error) => {
-        if (error?.code !== "ERR_CANCELED" && error?.name !== "CanceledError") {
-          setAlert({ type: "error", message: getApiError(error) })
-        }
+        if (error?.code !== "ERR_CANCELED" && error?.name !== "CanceledError") setAlert({ type: "error", message: getApiError(error) })
       })
-    }, 350)
-
+    }, search.trim() ? 350 : 0)
     return () => window.clearTimeout(timer)
-  }, [inventoryFilterKey])
+  }, [inventoryFilterKey, page, pageSize])
 
   useEffect(() => {
     const handleRealtime = (event) => {

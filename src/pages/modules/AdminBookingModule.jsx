@@ -24,7 +24,6 @@ import ModalCloseButton from "../../components/ui/ModalCloseButton"
 import Pagination from "../../components/ui/Pagination"
 import TableActionButton from "../../components/ui/TableActionButton"
 import TableCrudActions from "../../components/ui/TableCrudActions"
-import { usePagination } from "../../hooks/usePagination"
 import { useClickOutside } from "../../hooks/useClickOutside"
 import { api, getApiError, resolveFileUrl } from "../../lib/api"
 import { useAuthStore } from "../../stores/authStore"
@@ -232,6 +231,9 @@ const AdminBookingModule = ({ mode }) => {
   const [congestionLoading, setCongestionLoading] = useState(false)
   const [remarks, setRemarks] = useState("")
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [paginationMeta, setPaginationMeta] = useState({ total: 0, totalPages: 1 })
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState("")
   const [releasingId, setReleasingId] = useState("")
@@ -312,8 +314,10 @@ const AdminBookingModule = ({ mode }) => {
     if (filters.status) params.set("status", filters.status)
     if (filters.billingStatus) params.set("billingStatus", filters.billingStatus)
     if (filters.search) params.set("search", filters.search)
+    params.set("page", String(page))
+    params.set("limit", String(pageSize))
 
-    const requestKey = `${bookingBasePath}?${params.toString()}`
+    const requestKey = `${bookingBasePath}/module-data?${params.toString()}`
     if (!force && bookingsRequestRef.current.key === requestKey && bookingsRequestRef.current.promise) {
       return bookingsRequestRef.current.promise
     }
@@ -321,13 +325,11 @@ const AdminBookingModule = ({ mode }) => {
     const request = (async () => {
       try {
         setLoading(true)
-        const [{ data }, summaryResponse] = await Promise.all([
-          api.get(requestKey),
-          api.get("/admin/bookings/summary").catch(() => ({ data: { summary: {} } })),
-        ])
+        const { data } = await api.get(requestKey)
         const nextBookings = data.bookings || []
         setBookings(nextBookings)
-        setSummary(summaryResponse.data.summary || {})
+        setPaginationMeta({ total: Number(data.pagination?.total) || 0, totalPages: Math.max(Number(data.pagination?.totalPages) || 1, 1) })
+        setSummary(data.summary || {})
         setSelectedId((current) => current && nextBookings.some((booking) => booking.id === current) ? current : "")
       } catch (error) {
         setAlert({ type: "error", message: getApiError(error) })
@@ -341,7 +343,7 @@ const AdminBookingModule = ({ mode }) => {
 
     bookingsRequestRef.current = { key: requestKey, promise: request }
     return request
-  }, [bookingBasePath, filters.billingStatus, filters.search, filters.status])
+  }, [bookingBasePath, filters.billingStatus, filters.search, filters.status, page, pageSize])
 
   const loadAreas = useCallback(async ({ force = false } = {}) => {
     const requestKey = isPreAdviceApprovalMode ? `${yardBasePath}/blocks` : `${yardBasePath}/areas`
@@ -438,15 +440,20 @@ const AdminBookingModule = ({ mode }) => {
     setSelectedId("")
     setSelectedModalMode("view")
     setAlert({ type: "", message: "" })
+    setPage(1)
   }, [mode])
+
+  useEffect(() => { setPage(1) }, [filters.status, filters.billingStatus])
 
   useEffect(() => {
     loadBookings()
-  }, [filters.status, filters.billingStatus])
+  }, [loadBookings])
 
   useEffect(() => {
-    if (config.primarySection === "approval") loadAreas()
-  }, [config.primarySection, loadAreas])
+    if (!selectedId || config.primarySection !== "approval" || areas.length > 0) return
+    loadAreas()
+  }, [selectedId, config.primarySection, areas.length, loadAreas])
+
   useEffect(() => {
     const bookingId = location.state?.bookingId
     if (!bookingId || loading) return
@@ -737,11 +744,18 @@ const AdminBookingModule = ({ mode }) => {
 
   useClickOutside(filterRef, () => setShowFilters(false), showFilters)
 
-  const pagination = usePagination(
-    bookings,
-    10,
-    `${mode}|${filters.status}|${filters.billingStatus}|${filters.search}`,
-  )
+  const pagination = {
+    page,
+    setPage,
+    pageSize,
+    setPageSize: (value) => { setPageSize(Number(value) || 10); setPage(1) },
+    totalItems: paginationMeta.total,
+    totalPages: paginationMeta.totalPages,
+    startItem: paginationMeta.total === 0 ? 0 : (page - 1) * pageSize + 1,
+    endItem: Math.min(page * pageSize, paginationMeta.total),
+    pageSizeOptions: [10, 25, 50, 100],
+    paginatedItems: bookings,
+  }
 
   const moduleStats = useMemo(() => {
     if (mode === "preAdvice") {
@@ -782,7 +796,7 @@ const AdminBookingModule = ({ mode }) => {
     emerald: "border-emerald-100 bg-emerald-50 text-emerald-700",
   }
 
-  const handleSearch = () => loadBookings({ force: true })
+  const handleSearch = () => { if (page !== 1) setPage(1); else loadBookings({ force: true }) }
 
   const deleteBooking = async (booking) => {
     if (!canDeleteBooking) return
