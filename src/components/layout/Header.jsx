@@ -6,7 +6,6 @@ import {
   FiUser,
   FiLogOut,
   FiSettings,
-  FiSearch,
   FiChevronDown,
 } from "react-icons/fi";
 
@@ -56,23 +55,10 @@ const Header = ({ toggleSidebar, toggleMobileSidebar, sidebarOpen }) => {
               <FiMenu className="h-5 w-5 text-slate-600" />
             </button>
 
-            {/* Search Bar */}
-            <div className="hidden md:flex items-center bg-yard-fog rounded-md px-3 py-2 border border-transparent focus-within:border-yard-navy/30 focus-within:bg-white transition-colors">
-              <FiSearch className="h-4 w-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search..."
-                className="bg-transparent border-none outline-none ml-2 text-sm text-slate-700 placeholder:text-slate-400 w-48 lg:w-64"
-              />
-            </div>
-          </div>
+</div>
 
           {/* Right Section */}
           <div className="flex items-center space-x-1.5 md:space-x-2">
-            {/* Search - Mobile */}
-            <button className="md:hidden p-2 rounded-md hover:bg-yard-fog transition-colors">
-              <FiSearch className="h-5 w-5 text-slate-600" />
-            </button>
 
             {/* Notifications */}
             <div className="relative">

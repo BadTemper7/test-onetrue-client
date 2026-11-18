@@ -23,7 +23,7 @@ import {
   FiCornerDownRight,
   FiActivity,
 } from "react-icons/fi";
-import logo from "../../assets/logo.png";
+import logo from "../../assets/logo.webp";
 import { useAuthStore } from "../../stores/authStore";
 import { hasModulePermission } from "../../lib/permissions";
 
@@ -319,8 +319,8 @@ const Sidebar = ({ isOpen, isMobileOpen, toggleMobile, onClose }) => {
         <div className="border-b border-slate-200 bg-white px-4 py-4 flex flex-col items-center flex-shrink-0">
           <img
             src={logo}
-            alt="Logo"
-            className={`${isOpen ? "h-48 w-48" : "h-9 w-9"} object-contain transition-all duration-300`}
+            alt="One True Logistics Inc."
+            className={`${isOpen ? "h-36 w-44" : "h-9 w-9"} object-contain transition-all duration-300`}
           />
           {isOpen && (
             <div className="mt-2 text-center">
@@ -369,7 +369,7 @@ const Sidebar = ({ isOpen, isMobileOpen, toggleMobile, onClose }) => {
       >
         <div className="border-b border-slate-200 bg-white px-4 py-4 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
-            <img src={logo} alt="Logo" className="h-10 w-10 object-contain" />
+            <img src={logo} alt="One True Logistics Inc." className="h-10 w-10 object-contain" />
             <div>
               <div className="font-mono text-[10px] tracking-[0.15em] text-yard-green">
                 OTLI

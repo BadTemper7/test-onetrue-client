@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { TableToolbar, TableSearchField } from "../../components/table/TableToolbar";
+import { useEffect, useMemo, useState } from "react";
 import Alert from "../../components/Alert"
 import ModalCloseButton from "../../components/ui/ModalCloseButton";
 import { api, getApiError, resolveFileUrl } from "../../lib/api";
-import Pagination from "../../components/ui/Pagination";
-import TableCrudActions from "../../components/ui/TableCrudActions";
+import Pagination from "../../components/table/Pagination";
+import TableCrudActions from "../../components/table/TableCrudActions";
 import { usePagination } from "../../hooks/usePagination";
-import { useClickOutside } from "../../hooks/useClickOutside";
-import TableLoadingRow from "../../components/ui/TableLoadingRow"
+import TableLoadingRow from "../../components/table/TableLoadingRow"
 
 const statusClass = (status) => {
   if (status === "verified" || status === "active") {
@@ -41,8 +41,6 @@ const AdminClients = () => {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  const filterRef = useRef(null);
   const [selectedFilters, setSelectedFilters] = useState([
     "pending",
     "verified",
@@ -56,17 +54,21 @@ const AdminClients = () => {
   const [listLoading, setListLoading] = useState(true);
 
 
-  useClickOutside(filterRef, () => setShowFilters(false), showFilters);
-  const totals = useMemo(() => {
-    return {
-      verified: clients.filter((client) => isVerifiedStatus(client.status))
-        .length,
-      pending: clients.filter((client) => isPendingStatus(client.status))
-        .length,
-      rejected: clients.filter((client) => isRejectedStatus(client.status))
-        .length,
-    };
-  }, [clients]);
+  // Overall client verification counts come from the dedicated summary API,
+  // never from the currently loaded and filtered page of client registrations.
+  const [totals, setTotals] = useState({ verified: 0, pending: 0, rejected: 0 });
+  const [totalsLoading, setTotalsLoading] = useState(true);
+  const loadClientStats = async () => {
+    try {
+      const { data } = await api.get("/admin/client-registrations/stats");
+      setTotals(data.stats || { verified: 0, pending: 0, rejected: 0 });
+    } catch (err) {
+      setError(getApiError(err));
+    } finally {
+      setTotalsLoading(false);
+    }
+  };
+  useEffect(() => { loadClientStats(); }, []);
 
   const filteredClients = useMemo(() => {
     const keyword = searchTerm.trim().toLowerCase();
@@ -135,7 +137,7 @@ const AdminClients = () => {
       const { data } = await api.patch(`/admin/clients/${id}/approve`);
       setMessage(data.message);
       setSelectedClient(null);
-      await loadClients();
+      await Promise.all([loadClients(), loadClientStats()]);
     } catch (err) {
       setError(getApiError(err));
     }
@@ -159,7 +161,7 @@ const AdminClients = () => {
       setMessage(data.message);
       setRejectReasons((prev) => ({ ...prev, [id]: "" }));
       setSelectedClient(null);
-      await loadClients();
+      await Promise.all([loadClients(), loadClientStats()]);
     } catch (err) {
       setError(getApiError(err));
     }
@@ -200,7 +202,7 @@ const AdminClients = () => {
       setClientForm((current) => ({ ...current, ...data.user }));
       setIsEditingClient(false);
       setMessage(data.message || "Client updated successfully.");
-      await loadClients();
+      await Promise.all([loadClients(), loadClientStats()]);
     } catch (err) {
       setError(getApiError(err));
     } finally {
@@ -220,7 +222,7 @@ const AdminClients = () => {
         setClientForm(null);
       }
       setMessage(data.message || "Client deleted successfully.");
-      await loadClients();
+      await Promise.all([loadClients(), loadClientStats()]);
     } catch (err) {
       setError(getApiError(err));
     } finally {
@@ -230,8 +232,8 @@ const AdminClients = () => {
 
   return (
     <div className="space-y-6">
-      <div className="card p-5">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+      <div className="card p-5 otli-module-frame">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between otli-module-hero">
           <div>
             <div className="text-sm font-black uppercase tracking-wide text-emerald-700">
               Account Flow
@@ -247,13 +249,13 @@ const AdminClients = () => {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
+        <div className="otli-kpi-grid mt-5 grid gap-4 md:grid-cols-3 otli-module-kpis">
           <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
             <div className="text-xs font-black uppercase tracking-wide text-blue-600">
               Total Verified
             </div>
             <div className="mt-2 text-3xl font-black text-blue-700">
-              {totals.verified}
+              {totalsLoading ? "…" : totals.verified}
             </div>
           </div>
 
@@ -262,7 +264,7 @@ const AdminClients = () => {
               Total Pending
             </div>
             <div className="mt-2 text-3xl font-black text-amber-700">
-              {totals.pending}
+              {totalsLoading ? "…" : totals.pending}
             </div>
           </div>
 
@@ -271,7 +273,7 @@ const AdminClients = () => {
               Total Rejected
             </div>
             <div className="mt-2 text-3xl font-black text-red-700">
-              {totals.rejected}
+              {totalsLoading ? "…" : totals.rejected}
             </div>
           </div>
         </div>
@@ -294,91 +296,26 @@ const AdminClients = () => {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative">
-              <input
-                type="text"
-                className="input w-full !rounded-2xl !py-3 !pl-10 !pr-4 text-sm sm:w-[320px]"
-                placeholder="Search company, email, name..."
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-              />
+          <TableToolbar withTabs>
+            <TableSearchField
+ type="text"
+ placeholder="Search company, email, name..."
+ value={searchTerm}
+ onChange={(event) => setSearchTerm(event.target.value)}
+ ariaLabel="Search records"
+ />
 
-              <svg
-                className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="m21 21-4.35-4.35" />
-                <circle cx="11" cy="11" r="8" />
-              </svg>
+            <div role="group" aria-label="Filter client registrations by status" className="otli-table-toolbar-tabs">
+              <button type="button" className="otli-table-toolbar-tab"
+                aria-pressed={selectedFilters.length === filterOptions.length}
+                onClick={() => setSelectedFilters(filterOptions.map((option) => option.value))}>All</button>
+              {filterOptions.map((option) => (
+                <button key={option.value} type="button" className="otli-table-toolbar-tab"
+                  aria-pressed={selectedFilters.includes(option.value)}
+                  onClick={() => toggleFilter(option.value)}>{option.label}</button>
+              ))}
             </div>
-
-            <div className="relative" ref={filterRef}>
-              <button
-                type="button"
-                onClick={() => setShowFilters((prev) => !prev)}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 sm:w-auto"
-              >
-                <svg
-                  className="h-5 w-5"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M3 5h18" />
-                  <path d="M6 12h12" />
-                  <path d="M10 19h4" />
-                </svg>
-                Filter
-                <span className="rounded-full bg-slate-950 px-2 py-0.5 text-xs text-white">
-                  {selectedFilters.length}
-                </span>
-              </button>
-
-              {showFilters && (
-                <div className="absolute right-0 z-30 mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div className="text-xs font-black uppercase tracking-wide text-slate-500">
-                      Status Filter
-                    </div>
-
-                    <button
-                      type="button"
-                      className="text-xs font-black text-emerald-700"
-                      onClick={() =>
-                        setSelectedFilters(["pending", "verified", "rejected"])
-                      }
-                    >
-                      Reset
-                    </button>
-                  </div>
-
-                  <div className="space-y-3">
-                    {filterOptions.map((option) => (
-                      <label
-                        key={option.value}
-                        className="flex cursor-pointer items-center gap-3 rounded-xl p-2 hover:bg-slate-50"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedFilters.includes(option.value)}
-                          onChange={() => toggleFilter(option.value)}
-                          className="h-4 w-4 accent-slate-950"
-                        />
-                        <span className="text-sm font-bold text-slate-700">
-                          {option.label}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+          </TableToolbar>
         </div>
 
         <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-500">
@@ -387,7 +324,7 @@ const AdminClients = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] text-left text-sm">
+          <table className="otli-data-table w-full min-w-[1100px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Company</th>

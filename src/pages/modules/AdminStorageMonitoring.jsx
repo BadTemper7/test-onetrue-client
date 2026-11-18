@@ -1,12 +1,14 @@
+import { TableToolbar, TableSearchField, TableFilterButton } from "../../components/table/TableToolbar";
+import OperationalRecordCard, { RecordCardField } from "../../components/table/OperationalRecordCard"
+import FilterDropdownPortal from "../../components/table/FilterDropdownPortal"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Boxes, CalendarClock, Layers3, RefreshCw, Rotate3D, Search, SlidersHorizontal, Warehouse } from "lucide-react"
+import { Boxes, CalendarClock, Layers3, RefreshCw, Warehouse  } from "lucide-react"
 import Alert from "../../components/Alert"
 import ModalCloseButton from "../../components/ui/ModalCloseButton"
 import { api, getApiError } from "../../lib/api"
-import Pagination from "../../components/ui/Pagination"
-import TableCrudActions from "../../components/ui/TableCrudActions"
-import { useClickOutside } from "../../hooks/useClickOutside"
-import TableLoadingRow from "../../components/ui/TableLoadingRow"
+import Pagination from "../../components/table/Pagination"
+import TableCrudActions from "../../components/table/TableCrudActions"
+import TableLoadingRow from "../../components/table/TableLoadingRow"
 
 const MAP_WIDTH = 980
 const MAP_HEIGHT = 600
@@ -693,7 +695,6 @@ const AdminStorageMonitoring = () => {
   const realtimeRefreshFlagsRef = useRef({ inventory: false, yard: false })
   const [alert, setAlert] = useState({ type: "", message: "" })
 
-  useClickOutside(filterRef, () => setShowFilters(false), showFilters)
 
   const selectedArea = useMemo(() => areas.find((area) => area.id === selectedAreaId) || null, [areas, selectedAreaId])
 
@@ -883,8 +884,8 @@ const AdminStorageMonitoring = () => {
 
   return (
     <div className="space-y-6">
-      <section className="card p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <section className="card p-5 otli-module-frame">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between otli-module-hero">
           <div>
             <div className="flex items-center gap-2 text-sm font-black uppercase tracking-wide text-emerald-700"><Warehouse size={15} /> Yard Module</div>
             <h2 className="mt-1 text-2xl font-black text-slate-950">Storage Monitoring</h2>
@@ -892,7 +893,7 @@ const AdminStorageMonitoring = () => {
           </div>
           <button type="button" onClick={handleRefresh} className="btn-secondary shrink-0" disabled={loading}><RefreshCw size={16} className={loading ? "animate-spin" : ""} /> Refresh</button>
         </div>
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
+        <div className="otli-kpi-grid mt-5 grid gap-4 md:grid-cols-3 otli-module-kpis otli-module-kpis--icons-leading">
           <StatCard label="Selected Area" value={selectedArea?.name || "All Areas"} icon={Warehouse} tone="slate" />
           <StatCard label="Stored Containers" value={selectedAreaContainers.length} icon={Boxes} tone="blue" />
           <StatCard label={usedCapacity.label} value={Math.round(usedCapacity.value * 100) / 100} icon={CalendarClock} tone="emerald" />
@@ -906,17 +907,14 @@ const AdminStorageMonitoring = () => {
             <h3 className="text-lg font-black text-slate-950">Stored Container List</h3>
             <p className="text-sm font-semibold text-slate-500">Search and filter stored containers before reviewing the visual yard allocation.</p>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
-              <input className="input w-full !rounded-2xl !py-3 !pl-10 !pr-4 text-sm sm:w-[340px]" placeholder="Search container, booking, customer..." value={search} onChange={(event) => setSearch(event.target.value)} />
-            </div>
-            <div className="relative" ref={filterRef}>
-              <button type="button" onClick={() => setShowFilters((current) => !current)} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 sm:w-auto">
-                <SlidersHorizontal size={18} /> Filters
-              </button>
+          <TableToolbar>
+            <TableSearchField placeholder="Search container, booking, customer..." value={search} onChange={(event) => setSearch(event.target.value)}
+                ariaLabel="Search records"
+              />
+            <div className="relative otli-filter-control shrink-0" ref={filterRef}>
+              <TableFilterButton open={showFilters} onClick={() => setShowFilters((current) => !current)} label="Filters" />
               {showFilters && (
-                <div className="absolute right-0 z-40 mt-2 w-[310px] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
+                <FilterDropdownPortal open={showFilters} anchorRef={filterRef} onClose={() => setShowFilters(false)} className="w-[310px] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                     <p className="text-sm font-black text-slate-950">Filter Storage</p>
                     <button type="button" onClick={() => { setSelectedAreaId(""); setSelectedBlockId("") }} className="text-xs font-black text-emerald-700">Reset</button>
@@ -937,14 +935,52 @@ const AdminStorageMonitoring = () => {
                       </select>
                     </label>
                   </div>
-                </div>
+                </FilterDropdownPortal>
               )}
             </div>
-          </div>
+          </TableToolbar>
         </div>
         <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-500">Showing {selectedBlockContainers.length} stored containers</div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1050px] text-left text-sm">
+        <div className="space-y-3 p-3 md:hidden" aria-label="Stored container records">
+          {storagePagination.paginatedItems.map((container) => {
+            const displayStatus = container.bookingStatus || container.status
+            const storageDate = container.storageStartDate || container.storedAt || container.updatedAt
+            return (
+              <OperationalRecordCard
+                key={container.id}
+                eyebrow={container.bookingReference || container.preAdviceNumber || "Storage record"}
+                title={container.containerNumber}
+                subtitle={container.clientName || "Client"}
+                onOpen={() => setSelectedStorageContainer(container)}
+                actions={
+                  <TableCrudActions
+                    recordLabel={container.containerNumber}
+                    onView={() => setSelectedStorageContainer(container)}
+                    editDisabled
+                    deleteDisabled
+                    editLabel="Stored container locations are edited from Inventory"
+                    deleteLabel="Stored containers cannot be deleted from Monitoring"
+                  />
+                }
+                status={
+                  <>
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusClass(displayStatus)}`}>{statusLabels[displayStatus] || displayStatus?.replaceAll("_", " ")}</span>
+                    {container.isOverstaying && <span className="rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700">Overstaying</span>}
+                  </>
+                }
+              >
+                <RecordCardField label="Yard location">{[container.areaName || "Not assigned", container.blockCode || container.blockName, container.slotNumber ? `Slot ${container.slotNumber}` : "No slot"].filter(Boolean).join(" · ")}</RecordCardField>
+                <RecordCardField label="Size / type">{container.containerSize}ft · {String(container.containerType || "").replaceAll("_", " ")}</RecordCardField>
+                <RecordCardField label="Classification">{String(container.containerLoadStatus || container.containerStatus || "Unknown").replaceAll("_", " ")} · {String(container.rateType || "Unknown").replaceAll("_", " ")}</RecordCardField>
+                <RecordCardField label="Storage start">{formatDate(storageDate)}</RecordCardField>
+                <RecordCardField label="Days in yard">{daysInYard(storageDate)}</RecordCardField>
+              </OperationalRecordCard>
+            )
+          })}
+          {!loading && storagePagination.paginatedItems.length === 0 && <p className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">No stored containers match the selected view.</p>}
+        </div>
+        <div className="hidden overflow-x-auto md:block">
+          <table data-mobile-view="scroll" className="otli-data-table w-full min-w-[1050px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr><th className="px-5 py-3">Container</th><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Area / Block / Slot</th><th className="px-5 py-3">Size / Type</th><th className="px-5 py-3">Storage Start</th><th className="px-5 py-3">Days</th><th className="px-5 py-3">Status</th><th className="px-5 py-3 text-right">Actions</th></tr>
             </thead>

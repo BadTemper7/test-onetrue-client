@@ -2,6 +2,7 @@ import { Navigate, Outlet, Route, Routes } from "react-router-dom"
 import ProtectedRoute from "./components/auth/ProtectedRoute"
 import VerifiedClientRoute from "./components/auth/VerifiedClientRoute"
 import FormFieldValidation from "./components/FormFieldValidation"
+import AdaptiveTables from "./components/table/AdaptiveTables"
 import PageHelmet from "./components/meta/PageHelmet"
 import Layout from "./components/layout/Layout"
 import Login from "./pages/Login"
@@ -26,6 +27,7 @@ const TitledPage = ({ title, children }) => <><PageHelmet title={title} />{child
 function App() {
   return (
     <>
+      <AdaptiveTables />
       <FormFieldValidation />
       <Routes>
         <Route path="/login" element={<TitledPage title="Client Login"><Login /></TitledPage>} />

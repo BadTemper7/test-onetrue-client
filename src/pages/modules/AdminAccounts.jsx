@@ -1,25 +1,24 @@
+import { TableToolbar, TableSearchField, TableFilterButton } from "../../components/table/TableToolbar";
+import FilterDropdownPortal from "../../components/table/FilterDropdownPortal"
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
-  Search,
   ShieldCheck,
-  SlidersHorizontal,
   UserCog,
   UserPlus,
   Users,
-} from "lucide-react"
+ } from "lucide-react"
 import Alert from "../../components/Alert"
 import ModalCloseButton from "../../components/ui/ModalCloseButton"
 import { api, getApiError } from "../../lib/api"
-import Pagination from "../../components/ui/Pagination"
-import TableCrudActions from "../../components/ui/TableCrudActions"
+import Pagination from "../../components/table/Pagination"
+import TableCrudActions from "../../components/table/TableCrudActions"
 import { usePagination } from "../../hooks/usePagination"
-import { useClickOutside } from "../../hooks/useClickOutside"
 import {
   createEmptyPermissions,
   getPermissionsForRole,
   permissionModules,
 } from "../../lib/permissions"
-import TableLoadingRow from "../../components/ui/TableLoadingRow"
+import TableLoadingRow from "../../components/table/TableLoadingRow"
 
 const modules = permissionModules.map(({ key }) => key)
 const moduleLabels = Object.fromEntries(permissionModules.map(({ key, label }) => [key, label]))
@@ -64,21 +63,24 @@ const AdminAccounts = () => {
   const [isEditingUser, setIsEditingUser] = useState(false)
   const [editUserForm, setEditUserForm] = useState(null)
 
-  const statusOptions = useMemo(
-    () => [...new Set(users.map((user) => user.status).filter(Boolean))].sort(),
-    [users],
-  )
+  // Database-wide totals are independent of the current table page and filters.
+  const [totals, setTotals] = useState({ accounts: 0, active: 0, staff: 0 })
+  const [totalsLoading, setTotalsLoading] = useState(true)
+  const [statusOptions, setStatusOptions] = useState([])
 
+  const loadAdminStats = async () => {
+    try {
+      const { data } = await api.get("/admin/users/stats")
+      setTotals(data.stats || { accounts: 0, active: 0, staff: 0 })
+      setStatusOptions(data.statusOptions || [])
+    } catch (err) {
+      setError(getApiError(err))
+    } finally {
+      setTotalsLoading(false)
+    }
+  }
 
-  useClickOutside(filterRef, () => setShowFilters(false), showFilters);
-  const totals = useMemo(
-    () => ({
-      accounts: users.length,
-      active: users.filter((user) => ["active", "verified"].includes(user.status)).length,
-      staff: users.filter((user) => user.role === "staff").length,
-    }),
-    [users],
-  )
+  useEffect(() => { loadAdminStats() }, [])
 
   const filteredUsers = useMemo(() => {
     const keyword = searchTerm.trim().toLowerCase()
@@ -185,7 +187,7 @@ const AdminAccounts = () => {
       const { data } = await api.post("/admin/users", form)
       setMessage(data.message)
       closeCreateModal()
-      await loadAdmins()
+      await Promise.all([loadAdmins(), loadAdminStats()])
     } catch (err) {
       setError(getApiError(err))
     } finally {
@@ -238,7 +240,7 @@ const AdminAccounts = () => {
       setEditUserForm({ ...editUserForm, permissions: data.user.permissions })
       setIsEditingUser(false)
       setMessage(data.message || "Account updated successfully.")
-      await loadAdmins()
+      await Promise.all([loadAdmins(), loadAdminStats()])
     } catch (err) {
       setError(getApiError(err))
     } finally {
@@ -258,7 +260,7 @@ const AdminAccounts = () => {
         setEditUserForm(null)
       }
       setMessage(data.message || "Account deleted successfully.")
-      await loadAdmins()
+      await Promise.all([loadAdmins(), loadAdminStats()])
     } catch (err) {
       setError(getApiError(err))
     } finally {
@@ -268,8 +270,8 @@ const AdminAccounts = () => {
 
   return (
     <div className="space-y-6">
-      <div className="card p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div className="card p-5 otli-module-frame">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between otli-module-hero">
           <div>
             <div className="text-sm font-black uppercase tracking-wide text-emerald-700">
               Access Management
@@ -291,14 +293,14 @@ const AdminAccounts = () => {
           </button>
         </div>
 
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
+        <div className="otli-kpi-grid mt-5 grid gap-4 md:grid-cols-3 otli-module-kpis otli-module-kpis--icons-leading">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-xs font-black uppercase tracking-wide text-slate-500">
                   Total Accounts
                 </div>
-                <div className="mt-2 text-3xl font-black text-slate-950">{totals.accounts}</div>
+                <div className="mt-2 text-3xl font-black text-slate-950">{totalsLoading ? "…" : totals.accounts}</div>
               </div>
               <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-slate-700 shadow-sm">
                 <Users size={20} />
@@ -312,7 +314,7 @@ const AdminAccounts = () => {
                 <div className="text-xs font-black uppercase tracking-wide text-blue-600">
                   Active Accounts
                 </div>
-                <div className="mt-2 text-3xl font-black text-blue-700">{totals.active}</div>
+                <div className="mt-2 text-3xl font-black text-blue-700">{totalsLoading ? "…" : totals.active}</div>
               </div>
               <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/80 text-blue-700">
                 <ShieldCheck size={20} />
@@ -326,7 +328,7 @@ const AdminAccounts = () => {
                 <div className="text-xs font-black uppercase tracking-wide text-emerald-600">
                   Staff Accounts
                 </div>
-                <div className="mt-2 text-3xl font-black text-emerald-700">{totals.staff}</div>
+                <div className="mt-2 text-3xl font-black text-emerald-700">{totalsLoading ? "…" : totals.staff}</div>
               </div>
               <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/80 text-emerald-700">
                 <UserCog size={20} />
@@ -350,36 +352,20 @@ const AdminAccounts = () => {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative">
-              <input
+          <TableToolbar>
+            <TableSearchField
                 type="text"
-                className="input w-full !rounded-2xl !py-3 !pl-10 !pr-4 text-sm sm:w-[320px]"
                 placeholder="Search name, email, role..."
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
+                ariaLabel="Search records"
               />
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
-                size={19}
-              />
-            </div>
 
-            <div className="relative" ref={filterRef}>
-              <button
-                type="button"
-                onClick={() => setShowFilters((current) => !current)}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 sm:w-auto"
-              >
-                <SlidersHorizontal size={18} />
-                Filter
-                <span className="rounded-full bg-slate-950 px-2 py-0.5 text-xs text-white">
-                  {selectedRoles.length + selectedStatuses.length}
-                </span>
-              </button>
+            <div className="relative otli-filter-control shrink-0" ref={filterRef}>
+              <TableFilterButton open={showFilters} onClick={() => setShowFilters((current) => !current)} label="Filter" count={(selectedRoles.length === roleOptions.length ? 0 : selectedRoles.length) + selectedStatuses.length} />
 
               {showFilters && (
-                <div className="absolute right-0 z-30 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
+                <FilterDropdownPortal open={showFilters} anchorRef={filterRef} onClose={() => setShowFilters(false)} className="w-72 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
                   <div className="mb-3 flex items-center justify-between">
                     <div className="text-xs font-black uppercase tracking-wide text-slate-500">
                       Account Filters
@@ -433,10 +419,10 @@ const AdminAccounts = () => {
                       <p className="mt-2 text-xs font-semibold text-slate-400">No status selected means all statuses.</p>
                     </>
                   )}
-                </div>
+                </FilterDropdownPortal>
               )}
             </div>
-          </div>
+          </TableToolbar>
         </div>
 
         <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-500">
@@ -444,7 +430,7 @@ const AdminAccounts = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-left text-sm">
+          <table className="otli-data-table w-full min-w-[820px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Account</th>
@@ -502,7 +488,7 @@ const AdminAccounts = () => {
 
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
-          <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
+          <div className="max-h-[92dvh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
             <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200 bg-white p-5">
               <div>
                 <div className="text-sm font-black uppercase tracking-wide text-emerald-700">Account Setup</div>
@@ -512,7 +498,7 @@ const AdminAccounts = () => {
               <ModalCloseButton onClick={closeCreateModal} label="Close create account modal" />
             </div>
 
-            <form onSubmit={createAdmin} className="space-y-5 p-5">
+            <form onSubmit={createAdmin} className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-slate-500">Full Name</span>
@@ -586,7 +572,7 @@ const AdminAccounts = () => {
                     <div className="text-xs font-semibold text-slate-500">Choose the actions this staff account can perform.</div>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[620px] text-sm">
+                    <table data-mobile-view="scroll" className="otli-data-table w-full min-w-[620px] text-sm">
                       <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                         <tr>
                           <th className="px-3 py-2 text-left">Module</th>
@@ -631,7 +617,7 @@ const AdminAccounts = () => {
 
       {selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
-          <div className="w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-2xl">
+          <div className="flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
               <div>
                 <div className="text-sm font-black uppercase tracking-wide text-emerald-700">Account Details</div>
@@ -644,7 +630,7 @@ const AdminAccounts = () => {
               <ModalCloseButton onClick={() => setSelectedUser(null)} label="Close account details" />
             </div>
 
-            <div className="space-y-5 p-5">
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
               {isEditingUser ? (
                 <>
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -655,7 +641,7 @@ const AdminAccounts = () => {
                   </div>
                   {editUserForm?.role === "staff" && (
                     <div className="max-h-72 overflow-auto rounded-2xl border border-slate-200">
-                      <table className="w-full min-w-[620px] text-sm"><thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-3 py-2 text-left">Module</th>{actions.map((action) => <th key={action} className="px-3 py-2 capitalize">{action}</th>)}</tr></thead><tbody className="divide-y divide-slate-200">{modules.map((moduleName) => <tr key={moduleName}><td className="px-3 py-2 font-bold text-slate-700">{moduleLabels[moduleName] || moduleName}</td>{actions.map((action) => <td key={action} className="px-3 py-2 text-center"><input type="checkbox" checked={Boolean(editUserForm.permissions?.[moduleName]?.[action])} onChange={(event) => updateEditPermission(moduleName, action, event.target.checked)} className="h-4 w-4 accent-slate-950" /></td>)}</tr>)}</tbody></table>
+                      <table data-mobile-view="scroll" className="otli-data-table w-full min-w-[620px] text-sm"><thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-3 py-2 text-left">Module</th>{actions.map((action) => <th key={action} className="px-3 py-2 capitalize">{action}</th>)}</tr></thead><tbody className="divide-y divide-slate-200">{modules.map((moduleName) => <tr key={moduleName}><td className="px-3 py-2 font-bold text-slate-700">{moduleLabels[moduleName] || moduleName}</td>{actions.map((action) => <td key={action} className="px-3 py-2 text-center"><input type="checkbox" checked={Boolean(editUserForm.permissions?.[moduleName]?.[action])} onChange={(event) => updateEditPermission(moduleName, action, event.target.checked)} className="h-4 w-4 accent-slate-950" /></td>)}</tr>)}</tbody></table>
                     </div>
                   )}
                 </>

@@ -1,5 +1,5 @@
 // pages/Register.jsx (Fixed with equal 1/2 sections)
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
   FiArrowLeft,
@@ -34,6 +34,15 @@ const Register = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
+  const [otpStatusUncertain, setOtpStatusUncertain] = useState(false);
+  const [otpCooldown, setOtpCooldown] = useState(0);
+  const [manualReviewAvailable, setManualReviewAvailable] = useState(false);
+  useEffect(() => {
+    if (otpCooldown <= 0) return undefined;
+    const timer = window.setTimeout(() => setOtpCooldown((remaining) => Math.max(0, remaining - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [otpCooldown]);
+
   const [otpVerified, setOtpVerified] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -293,22 +302,77 @@ const Register = () => {
     setCurrentStep((prev) => Math.max(prev - 1, 1));
   };
 
+  const handleRegistrationSendError = (error, field = "general") => {
+    const details = error?.response?.data || {};
+    if (error?.response?.status === 429 && details.code === "REGISTRATION_OTP_RESEND_COOLDOWN") {
+      setOtpCooldown(Math.max(1, Number(details.retryAfterSeconds) || 60));
+      setOtpStatusUncertain(true);
+      setErrors({ [field]: details.message || "An OTP was recently sent. Check your inbox before trying again." });
+      return;
+    }
+    if (error?.response?.status === 429 && details.code === "REGISTRATION_EMAIL_LIMIT") {
+      setOtpCooldown(Math.max(1, Number(details.retryAfterSeconds) || 12));
+      setManualReviewAvailable(true);
+      setErrors({ [field]: details.message || "Email sending is at capacity. Try later or submit for manual review." });
+      return;
+    }
+    const uncertain = details.code === "REGISTRATION_OTP_DELIVERY_UNCONFIRMED" ||
+      (!error?.response && ["ECONNABORTED", "ETIMEDOUT", "ERR_NETWORK"].includes(error?.code));
+    setOtpStatusUncertain(uncertain);
+    setErrors({
+      [field]: uncertain
+        ? "OTP delivery could not be confirmed. If you receive a code, use 'I received an OTP'. Do not repeatedly submit the documents."
+        : getApiError(error),
+    });
+  };
+
+  // Creates a pending, unverified account without sending an email. The client
+  // can sign in to view their review status, but booking remains restricted.
+  const submitManualReview = async () => {
+    if (!validateStep5()) return;
+    setLoading(true);
+    setErrors({});
+    try {
+      const { data } = await api.post(
+        "/auth/client/register/manual-review",
+        buildRegistrationFormData(),
+        { headers: { "Content-Type": "multipart/form-data" }, timeout: 120000 },
+      );
+      saveSession({ token: data.token, user: data.user });
+      navigate("/profile", { replace: true });
+    } catch (error) {
+      setErrors({ general: getApiError(error) });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const sendOTP = async () => {
     setLoading(true);
     setErrors({});
 
     try {
+      // Check quota before uploading the same large documents again.
+      // The final POST also reserves a slot atomically to prevent bursts.
+      await api.get("/auth/client/register/email-status", { timeout: 10000 });
       const { data } = await api.post(
         "/auth/client/register/request-otp",
         buildRegistrationFormData(),
-        { headers: { "Content-Type": "multipart/form-data" } },
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+          timeout: 120000, // document upload + single registration OTP email
+        },
       );
+      setOtpStatusUncertain(false);
+      setOtpCooldown(0);
+      setManualReviewAvailable(false);
       setOtpSent(true);
       setCurrentStep(5);
       return data;
     } catch (error) {
-      setErrors({ general: getApiError(error) });
-      throw error;
+      // No automatic retry: SMTP may have accepted the OTP already, even if the request failed.
+      handleRegistrationSendError(error);
+      return null;
     } finally {
       setLoading(false);
     }
@@ -358,10 +422,11 @@ const Register = () => {
       await api.post("/auth/client/register/resend-otp", {
         email: formData.email.trim(),
       });
+      setOtpCooldown(0);
       setOtpSent(true);
       setFormData((prev) => ({ ...prev, otp: "" }));
     } catch (error) {
-      setErrors({ otp: getApiError(error) });
+      handleRegistrationSendError(error, "otp");
     } finally {
       setLoading(false);
     }
@@ -736,15 +801,24 @@ const Register = () => {
         containerClassName="py-4"
       />
 
+      {manualReviewAvailable && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <p>Registration email sending is limited. You can submit the uploaded documents for manual verification instead.</p>
+          {otpCooldown > 0 && <p className="mt-1">Try OTP again in {otpCooldown} seconds.</p>}
+          <button type="button" className="mt-2 font-semibold text-emerald-700 underline disabled:opacity-50" onClick={submitManualReview} disabled={loading}>
+            Submit for Manual Review
+          </button>
+        </div>
+      )}
       {otpSent && !otpVerified && (
         <div className="flex items-center justify-between">
           <button
             type="button"
             onClick={handleResendOTP}
-            disabled={loading}
+            disabled={loading || otpCooldown > 0}
             className="text-sm text-emerald-600 hover:text-emerald-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Resend OTP
+            {otpCooldown > 0 ? `Resend in ${otpCooldown}s` : "Resend OTP"}
           </button>
           <span className="text-xs text-gray-400">
             Didn't receive the code?
@@ -927,6 +1001,38 @@ const Register = () => {
               {errors.general}
             </div>
           )}
+          {currentStep === 4 && (
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <p className="font-semibold">{manualReviewAvailable ? "OTP quota is busy. You can register without email." : "Prefer to register without waiting for email?"}</p>
+              <p className="mt-1">Submit your documents for manual review. Your account stays pending until an administrator checks them. Your email will not be marked verified.</p>
+              {otpCooldown > 0 && (
+                <p className="mt-2 font-medium" role="status">OTP sending available to retry in {otpCooldown} seconds.</p>
+              )}
+              <button
+                type="button"
+                disabled={loading}
+                onClick={submitManualReview}
+                className="mt-3 rounded-lg bg-emerald-700 px-4 py-3 font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
+              >
+                {loading ? "Submitting..." : "Submit for Manual Review (No OTP)"}
+              </button>
+            </div>
+          )}
+          {currentStep === 4 && otpStatusUncertain && (
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => {
+                setOtpSent(true);
+                setOtpStatusUncertain(false);
+                setErrors({});
+                setCurrentStep(5);
+              }}
+              className="mt-3 text-sm font-medium text-emerald-700 underline disabled:opacity-50"
+            >
+              I received an OTP - enter the code
+            </button>
+          )}
 
           {/* Form Content */}
           <div className="mt-6">{renderStep()}</div>
@@ -948,7 +1054,7 @@ const Register = () => {
               variant="primary"
               onClick={currentStep === 5 ? handleSubmit : handleNext}
               loading={loading}
-              disabled={loading}
+              disabled={loading || (currentStep === 4 && otpCooldown > 0)}
               icon={
                 currentStep === 5 ? (
                   <FiCheck className="h-5 w-5" />
@@ -964,7 +1070,7 @@ const Register = () => {
               }
             >
               {currentStep === 4
-                ? "Upload and Send OTP"
+                ? (otpCooldown > 0 ? `OTP retry in ${otpCooldown}s` : "Upload and Send OTP")
                 : currentStep === 5
                   ? "Verify and Submit"
                   : "Next"}

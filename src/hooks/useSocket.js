@@ -71,18 +71,18 @@ export const useSocket = ({ token, enabled = true }) => {
   useEffect(() => {
     if (!enabled || !token) return undefined
 
-    // Prefer WebSocket, but keep Socket.IO polling as a deployment fallback.
-    // The server sends no-store headers for both transports.
+    // Hostinger managed Node.js hosting may not support WebSockets.
+    // Start with Socket.IO HTTP polling for reliable notifications.
     const socket = io(SOCKET_URL, {
       path: "/socket.io",
       auth: { token },
-      transports: ["websocket", "polling"],
+      transports: ["polling", "websocket"],
       upgrade: true,
-      rememberUpgrade: true,
+      rememberUpgrade: false,
       reconnection: true,
-      reconnectionAttempts: 10,
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
+      reconnectionDelayMax: 15000,
       timeout: 15000,
     })
 

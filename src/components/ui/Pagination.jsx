@@ -26,12 +26,13 @@ const Pagination = ({
     <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-500">
         <span>
-          Showing <strong className="text-slate-800">{startItem}-{endItem}</strong> of{" "}
-          <strong className="text-slate-800">{totalItems}</strong>
+          Showing <strong className="text-slate-800">{totalItems > 0 ? startItem : 0}-{endItem}</strong> of{" "}
+          <strong className="text-slate-800">{Number(totalItems || 0).toLocaleString()}</strong>
         </span>
         <label className="inline-flex items-center gap-2">
-          <span>Rows</span>
+          <span>Rows per page</span>
           <select
+            aria-label="Rows per page"
             value={pageSize}
             onChange={(event) => setPageSize(event.target.value)}
             className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-bold text-slate-700 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"

@@ -1,3 +1,5 @@
+import { TableToolbar, TableSearchField, TableFilterButton } from "../../components/table/TableToolbar";
+import FilterDropdownPortal from "../../components/table/FilterDropdownPortal"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import {
@@ -12,24 +14,21 @@ import {
   Plus,
   Printer,
   RefreshCw,
-  Search,
-  SlidersHorizontal,
   ShieldX,
   Trash2,
   Truck,
   Warehouse,
-} from "lucide-react"
+ } from "lucide-react"
 import Alert from "../../components/Alert"
 import ModalCloseButton from "../../components/ui/ModalCloseButton"
-import Pagination from "../../components/ui/Pagination"
-import TableActionButton from "../../components/ui/TableActionButton"
-import TableCrudActions from "../../components/ui/TableCrudActions"
-import { useClickOutside } from "../../hooks/useClickOutside"
+import Pagination from "../../components/table/Pagination"
+import TableActionButton from "../../components/table/TableActionButton"
+import TableCrudActions from "../../components/table/TableCrudActions"
 import { api, getApiError, resolveFileUrl } from "../../lib/api"
 import { useAuthStore } from "../../stores/authStore"
 import { hasModulePermission } from "../../lib/permissions"
 import { printBookingDocument } from "../../lib/printDocument"
-import TableLoadingRow from "../../components/ui/TableLoadingRow"
+import TableLoadingRow from "../../components/table/TableLoadingRow"
 
 const statusLabels = {
   pending_admin_approval: "Pending Admin Approval",
@@ -742,7 +741,6 @@ const AdminBookingModule = ({ mode }) => {
     }
   }
 
-  useClickOutside(filterRef, () => setShowFilters(false), showFilters)
 
   const pagination = {
     page,
@@ -821,8 +819,8 @@ const AdminBookingModule = ({ mode }) => {
 
   return (
     <div className="space-y-6">
-      <section className="card p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <section className="card p-5 otli-module-frame">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between otli-module-hero">
           <div>
             <div className="flex items-center gap-2 text-sm font-black uppercase tracking-wide text-emerald-700">
               <HeaderIcon size={15} /> {config.badge}
@@ -835,7 +833,7 @@ const AdminBookingModule = ({ mode }) => {
           </button>
         </div>
 
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
+        <div className="otli-kpi-grid mt-5 grid gap-4 md:grid-cols-3 otli-module-kpis otli-module-kpis--icons-leading">
           {moduleStats.map((stat) => (
             <div key={stat.label} className={`rounded-2xl border p-5 ${toneClasses[stat.tone]}`}>
               <div className="flex items-center justify-between gap-4">
@@ -861,29 +859,20 @@ const AdminBookingModule = ({ mode }) => {
             <p className="text-sm font-semibold text-slate-500">Search and filter records before opening the complete booking details.</p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
-              <input
-                className="input w-full !rounded-2xl !py-3 !pl-10 !pr-4 text-sm sm:w-[320px]"
+          <TableToolbar>
+            <TableSearchField
                 placeholder="Search reference, container, client..."
                 value={filters.search}
                 onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
                 onKeyDown={(event) => event.key === "Enter" && handleSearch()}
+                ariaLabel="Search records"
               />
-            </div>
 
             <div className="relative" ref={filterRef}>
-              <button
-                type="button"
-                onClick={() => setShowFilters((current) => !current)}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 sm:w-auto"
-              >
-                <SlidersHorizontal size={18} /> Filters
-              </button>
+              <TableFilterButton open={showFilters} onClick={() => setShowFilters((current) => !current)} label="Filters" />
 
               {showFilters && (
-                <div className="absolute right-0 z-40 mt-2 w-[300px] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
+                <FilterDropdownPortal open={showFilters} anchorRef={filterRef} onClose={() => setShowFilters(false)} className="w-[320px] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                     <p className="text-sm font-black text-slate-950">Filter Records</p>
                     <button
@@ -910,10 +899,10 @@ const AdminBookingModule = ({ mode }) => {
                       </select>
                     </label>
                   </div>
-                </div>
+                </FilterDropdownPortal>
               )}
             </div>
-          </div>
+          </TableToolbar>
         </div>
 
         {config.primarySection === "billing" && (
@@ -961,7 +950,7 @@ const AdminBookingModule = ({ mode }) => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1150px] text-left text-sm">
+          <table className="otli-data-table w-full min-w-[1150px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Booking / Client</th>
@@ -1010,6 +999,7 @@ const AdminBookingModule = ({ mode }) => {
                       {config.primarySection === "gateOut" && (
                         <TableActionButton
                           label={getCashPaymentDisabledReason(booking) || `Record cash payment for ${booking.bookingReference}`}
+                          menuLabel="Record cash payment"
                           variant="success"
                           disabled={Boolean(getCashPaymentDisabledReason(booking))}
                           onClick={() => openCashPayment(booking)}
@@ -1020,6 +1010,7 @@ const AdminBookingModule = ({ mode }) => {
                       {config.primarySection === "gateOut" && booking.status === "gate_out_approved" && !booking.releasedAt && (
                         <TableActionButton
                           label={`Release container ${booking.containerNumber}`}
+                          menuLabel="Release container"
                           variant="warning"
                           loading={releasingId === booking.id}
                           onClick={() => completeGateOutFromTable(booking)}

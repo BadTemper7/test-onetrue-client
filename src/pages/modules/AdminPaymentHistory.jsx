@@ -1,13 +1,14 @@
+import { TableToolbar, TableSearchField, TableToolbarSelect } from "../../components/table/TableToolbar";
 import { useEffect, useState } from "react"
-import { CreditCard, Printer, RefreshCw, Search } from "lucide-react"
+import { CreditCard, Printer, RefreshCw  } from "lucide-react"
 import Alert from "../../components/Alert"
 import ModalCloseButton from "../../components/ui/ModalCloseButton"
-import Pagination from "../../components/ui/Pagination"
-import TableActionButton from "../../components/ui/TableActionButton"
-import TableCrudActions from "../../components/ui/TableCrudActions"
+import Pagination from "../../components/table/Pagination"
+import TableActionButton from "../../components/table/TableActionButton"
+import TableCrudActions from "../../components/table/TableCrudActions"
 import { api, getApiError } from "../../lib/api"
 import { printBookingDocument } from "../../lib/printDocument"
-import TableLoadingRow from "../../components/ui/TableLoadingRow"
+import TableLoadingRow from "../../components/table/TableLoadingRow"
 
 const money = (value) => `PHP ${Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const formatDate = (value) => value ? new Date(value).toLocaleString("en-PH") : "-"
@@ -73,7 +74,7 @@ const AdminPaymentHistory = ({ mode = "history" }) => {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="otli-module-hero otli-module-standalone rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Billing Records</p>
@@ -89,21 +90,17 @@ const AdminPaymentHistory = ({ mode = "history" }) => {
       {error && <Alert type="error" message={error} />}
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-slate-200 p-4 md:flex-row">
-          <label className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
-            <input className="input pl-10" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search booking, container, client, payment, or receipt" />
-          </label>
-          <select className="input md:max-w-[220px]" value={paymentType} onChange={(event) => setPaymentType(event.target.value)}>
-            <option value="all">All payment types</option>
-            <option value="cash">Cash</option>
-            <option value="bank">Bank</option>
-            <option value="ewallet">E-wallet</option>
-          </select>
+        <div className="border-b border-slate-200 p-4">
+          <TableToolbar>
+            <TableSearchField value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search payment, container, client..." ariaLabel="Search payment history" />
+            <TableToolbarSelect label="Payment type" value={paymentType} onChange={(event) => setPaymentType(event.target.value)}>
+              <option value="all">All payment types</option><option value="cash">Cash</option><option value="bank">Bank</option><option value="ewallet">E-wallet</option>
+            </TableToolbarSelect>
+          </TableToolbar>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] text-left text-sm">
+          <table className="otli-data-table w-full min-w-[1100px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Transaction</th>
@@ -137,6 +134,7 @@ const AdminPaymentHistory = ({ mode = "history" }) => {
                       {item.isVatApplicable && (
                         <TableActionButton
                           label={`Print VAT invoice for ${item.bookingReference}`}
+                          menuLabel="Print VAT invoice"
                           variant="info"
                           onClick={() => printBookingDocument({ ...item, billingTotal: item.total, billingSubtotal: item.subtotal, billingLineItems: item.lineItems }, "invoice")}
                         >
@@ -145,6 +143,7 @@ const AdminPaymentHistory = ({ mode = "history" }) => {
                       )}
                       <TableActionButton
                         label={`Print ${item.isVatApplicable ? "receipt" : "acknowledgement receipt"} for ${item.bookingReference}`}
+                        menuLabel={item.isVatApplicable ? "Print receipt" : "Print acknowledgement"}
                         variant="success"
                         onClick={() => printBookingDocument({ ...item, billingTotal: item.total, billingSubtotal: item.subtotal, billingLineItems: item.lineItems }, "receipt")}
                       >

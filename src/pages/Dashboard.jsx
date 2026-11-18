@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import DashboardPeriodControls from "../components/dashboard/DashboardPeriodControls";
 import {
   FiActivity,
   FiAlertTriangle,
@@ -12,7 +13,6 @@ import {
   FiMapPin,
   FiPackage,
   FiPieChart,
-  FiRefreshCw,
   FiTruck,
   FiUserCheck,
   FiUsers,
@@ -20,16 +20,17 @@ import {
 } from "react-icons/fi";
 import { useAuthStore } from "../stores/authStore";
 import { useAdminDashboardStore } from "../stores/adminDashboardStore";
-import Pagination from "../components/ui/Pagination";
+import Pagination from "../components/table/Pagination";
 import DashboardCharts from "../components/dashboard/DashboardCharts";
 import { usePagination } from "../hooks/usePagination";
-import TableLoadingRow from "../components/ui/TableLoadingRow"
+import TableLoadingRow from "../components/table/TableLoadingRow"
 
 const periodOptions = [
   { value: "daily", label: "Daily" },
   { value: "weekly", label: "Weekly" },
   { value: "monthly", label: "Monthly" },
   { value: "yearly", label: "Yearly" },
+  { value: "custom", label: "Custom range" },
 ];
 
 const periodText = {
@@ -37,6 +38,7 @@ const periodText = {
   weekly: "this week",
   monthly: "this month",
   yearly: "this year",
+  custom: "for the selected dates",
 };
 
 const releasedLabel = {
@@ -44,6 +46,7 @@ const releasedLabel = {
   weekly: "Containers Released This Week",
   monthly: "Containers Released This Month",
   yearly: "Containers Released This Year",
+  custom: "Containers Released (Custom Range)",
 };
 
 const statusClass = (status) => {
@@ -66,6 +69,7 @@ const formatDateRange = (range) => {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "Asia/Manila",
   });
   return `${formatter.format(new Date(range.start))} - ${formatter.format(new Date(range.end))}`;
 };
@@ -75,6 +79,7 @@ const Dashboard = () => {
   const user = useAuthStore((state) => state.user);
   const {
     period,
+    customRange,
     metrics,
     bookingSummary,
     recentAccounts,
@@ -84,6 +89,7 @@ const Dashboard = () => {
     loading,
     error,
     setPeriod,
+    applyCustomRange,
     fetchDashboard,
   } = useAdminDashboardStore();
 
@@ -135,8 +141,8 @@ const Dashboard = () => {
       {
         icon: FiPieChart,
         label: "Average Occupancy Rate",
-        value: `${Number(metrics.averageOccupancyRate ?? metrics.occupancyRate ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}%`,
-        helper: `${periodOptions.find((option) => option.value === period)?.label || "Daily"} average • ${Number(metrics.currentOccupancyRate || 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}% current`,
+        value: metrics.averageOccupancyRate == null ? "N/A" : `${Number(metrics.averageOccupancyRate).toLocaleString("en-US", { maximumFractionDigits: 2 })}%`,
+        helper: `${periodOptions.find((option) => option.value === period)?.label || "Daily"} time-weighted average • ${metrics.currentOccupancyRate == null ? "N/A" : `${Number(metrics.currentOccupancyRate).toFixed(2)}%`} current${metrics.occupancyQuality?.reliability === "partial" ? " • Incomplete historical records" : ""}`,
       },
       {
         icon: FiDollarSign,
@@ -174,7 +180,7 @@ const Dashboard = () => {
   return (
     <div className="space-y-6">
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-emerald-50/60 to-blue-50 p-6 text-slate-950 shadow-sm md:p-8">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-5">
           <div>
             <p className="font-mono text-xs uppercase tracking-[0.18em] text-yard-green">
               OTLI operations command center
@@ -187,29 +193,15 @@ const Dashboard = () => {
             </p>
             {range && <p className="mt-2 text-xs font-bold text-slate-400">Reporting period: {formatDateRange(range)}</p>}
           </div>
-          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-end">
-            <label className="block min-w-[180px]">
-              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Dashboard period</span>
-              <select
-                value={period}
-                onChange={(event) => setPeriod(event.target.value)}
-                disabled={loading}
-                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-yard-navy outline-none transition focus:border-yard-green focus:ring-2 focus:ring-yard-green/20 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {periodOptions.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              onClick={() => fetchDashboard()}
-              disabled={loading}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-yard-green px-4 py-3 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
-            >
-              <FiRefreshCw className={loading ? "animate-spin" : ""} />
-              Refresh dashboard
-            </button>
+          <div className="flex w-full justify-start xl:justify-end">
+            <DashboardPeriodControls
+              period={period}
+              customRange={customRange}
+              loading={loading}
+              onPresetChange={setPeriod}
+              onApplyCustomRange={applyCustomRange}
+              onRefresh={() => fetchDashboard()}
+            />
           </div>
         </div>
       </section>
@@ -219,6 +211,10 @@ const Dashboard = () => {
           {error}
         </div>
       )}
+
+      <p className="-mt-2 text-xs text-slate-500">
+        Movement, revenue, top customer and occupancy trends use the reporting period. Current inventory, yard capacity, overstays and pending items reflect live status.
+      </p>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
@@ -237,7 +233,7 @@ const Dashboard = () => {
         ))}
       </div>
 
-      <DashboardCharts data={trend?.series || []} />
+      <DashboardCharts data={trend?.series || []} occupancyAverageRate={metrics.averageOccupancyRate} />
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between">
@@ -277,7 +273,7 @@ const Dashboard = () => {
             </span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[680px] text-left text-sm">
+            <table className="otli-data-table w-full min-w-[680px] text-left text-sm">
               <thead className="bg-yard-fog text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-5 py-3">Name</th>

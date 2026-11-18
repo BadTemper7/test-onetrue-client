@@ -32,7 +32,7 @@ const normalizeData = (data = []) =>
     label: point.label || `Point ${index + 1}`,
     containersReceived: clampNumber(point.containersReceived),
     containersReleased: clampNumber(point.containersReleased),
-    occupancyRate: Math.min(Math.max(clampNumber(point.occupancyRate), 0), 100),
+    occupancyRate: point.occupancyRate == null ? null : Math.max(clampNumber(point.occupancyRate), 0),
     occupiedSlots: clampNumber(point.occupiedSlots),
     revenue: clampNumber(point.revenue),
   }));
@@ -130,13 +130,14 @@ const MovementChart = ({ data = [] }) => {
   );
 };
 
-const OccupancyChart = ({ data = [] }) => {
+const OccupancyChart = ({ data = [], averageRate }) => {
   const chartData = normalizeData(data);
 
   return (
     <ChartShell
       title="Occupancy rate"
-      description="Historical TEU slot utilization for each point in the selected period."
+      description="Time-weighted physical yard-slot utilization from confirmed Gate-In and release events."
+      summary={`Backend period average: ${averageRate == null ? "N/A" : `${Number(averageRate).toFixed(2)}%`}`}
     >
       {!chartData.length ? (
         <EmptyChart />
@@ -153,8 +154,7 @@ const OccupancyChart = ({ data = [] }) => {
               interval="preserveStartEnd"
             />
             <YAxis
-              domain={[0, 100]}
-              ticks={[0, 25, 50, 75, 100]}
+              domain={[0, (dataMax) => Math.max(100, Math.ceil(dataMax / 25) * 25)]}
               tickFormatter={(value) => `${value}%`}
               tick={axisTick}
               tickLine={false}
@@ -238,10 +238,10 @@ const RevenueChart = ({ data = [] }) => {
   );
 };
 
-const DashboardCharts = ({ data = [] }) => (
+const DashboardCharts = ({ data = [], occupancyAverageRate = null }) => (
   <div className="grid gap-6 xl:grid-cols-2">
     <MovementChart data={data} />
-    <OccupancyChart data={data} />
+    <OccupancyChart data={data} averageRate={occupancyAverageRate} />
     <div className="xl:col-span-2">
       <RevenueChart data={data} />
     </div>
